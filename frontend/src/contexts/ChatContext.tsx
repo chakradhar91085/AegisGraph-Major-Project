@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import axios from 'axios';
 import { chatApi } from '../api';
 import type { TelemetryEvent, GraphVisualizationPayload } from '../api';
 
@@ -9,6 +10,22 @@ export interface Message {
   telemetry?: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
   llm_provider?: string;
+  llm_model?: string;
+}
+
+// Plain-language explanation of a failed chat request.
+function describeError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    if (!err.response) return "Can't reach the AegisGraph server. Check that the backend is running.";
+    const status = err.response.status;
+    if (status === 401) return 'Your sign-in has expired. Please sign in again.';
+    if (status === 403) return "Your account isn't allowed to do that.";
+    if (status === 429) return 'Please wait for your previous question to finish.';
+    if (status === 422) return 'That question could not be read. Try rephrasing it (max 2000 characters).';
+    if (status >= 500) return 'The server ran into a problem while answering. Please try again.';
+    return `The request failed (HTTP ${status}).`;
+  }
+  return 'Something went wrong while sending your question.';
 }
 
 interface ChatContextType {
@@ -18,6 +35,7 @@ interface ChatContextType {
 
   sendMessage: (text: string) => Promise<void>;
   clearSession: () => void;
+  resetConversation: () => void;
   endActiveSession: () => Promise<void>;
   activeGraphData: GraphVisualizationPayload | null;
   setActiveGraphData: (data: GraphVisualizationPayload | null) => void;
@@ -54,6 +72,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         telemetry: response.telemetry,
         graph_data: response.graph_data,
         llm_provider: response.llm_provider,
+        llm_model: response.llm_model,
       };
 
       setMessages((prev) => [...prev, agentMessage]);
@@ -62,22 +81,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (response.graph_data) {
         setActiveGraphData(response.graph_data);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to connect to AegisGraph engine.');
+    } catch (err) {
+      setError(describeError(err));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const clearSession = useCallback(() => {
-    // Best effort: only honored by servers running in demo mode.
-    chatApi.resetRisk().catch(() => {});
+  // Forget the conversation in this browser tab (used on sign-out, so the next
+  // person on the same browser never sees the previous user's chat).
+  const resetConversation = useCallback(() => {
     sessionStorage.removeItem('aegis_session_token');
     sessionStorage.removeItem('aegis_session_id');
     setMessages([]);
     setError(null);
     setActiveGraphData(null);
   }, []);
+
+  const clearSession = useCallback(() => {
+    // Best effort: the server honors this only for Auditors in demo mode.
+    chatApi.resetRisk().catch(() => {});
+    resetConversation();
+  }, [resetConversation]);
 
   const endActiveSession = useCallback(async () => {
     const sessionToken = sessionStorage.getItem('aegis_session_token');
@@ -94,7 +119,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   return (
     <ChatContext.Provider value={{
       messages, loading, error,
-      sendMessage, clearSession, endActiveSession,
+      sendMessage, clearSession, resetConversation, endActiveSession,
       activeGraphData, setActiveGraphData
     }}>
       {children}

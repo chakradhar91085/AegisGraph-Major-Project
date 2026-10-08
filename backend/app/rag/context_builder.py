@@ -7,6 +7,7 @@ deterministic text context for the LLM. Enforces size limits.
 from typing import List, Dict, Any
 from app.retrieval.schemas import RetrievalResponse, ResolutionStatus
 from app.core.config import settings
+from app.security.masking import names_from_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -89,19 +90,20 @@ class ContextBuilder:
 
     def _format_employee(self, response: RetrievalResponse, results: List[Dict[str, Any]]) -> List[str]:
         parts = ["PERSON PROFILE"]
+        asked_for = response.resolved_entities[0].query_value if response.resolved_entities else ""
+        if asked_for and "@" not in asked_for:
+            parts.append(f"Closest match in the graph for '{asked_for}':")
         for row in results:
-            part = (
-                f"- Name: {row.get('name', 'Unknown')}\n"
-                f"- Email: {row.get('email', 'Unknown')}\n"
-                f"- Domain: {row.get('domain', 'Unknown')}\n"
-                f"- Mailbox: {row.get('mailbox', 'Unknown')}"
-            )
-            parts.append(part)
+            email = row.get('email') or 'Unknown'
+            # Most Person nodes have no stored name; the email local part carries it.
+            name = row.get('name') or next(iter(names_from_text(email)), '').title() or 'Unknown'
+            parts.append(f"- Name: {name}\n- Email: {email}")
         return ["\n".join(parts)]
 
     def _format_emails(self, response: RetrievalResponse, results: List[Dict[str, Any]]) -> List[str]:
         header = self._get_subject_header(response)
-        parts = ["REPRESENTATIVE EMAIL EVIDENCE"]
+        direction = "SENT" if response.strategy == "sent_emails" else "RECEIVED"
+        parts = [f"EMAILS {direction} BY THE IDENTIFIED EMPLOYEE ({len(results)} most recent)"]
         if header:
             parts.append(header)
         for row in results:

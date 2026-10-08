@@ -1,4 +1,6 @@
+import asyncio
 import uuid
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
@@ -7,21 +9,27 @@ import logging
 from app.core.config import settings
 from app.db.postgres import AsyncSessionLocal
 from app.rag.service import graph_rag_service
-from app.security.auth import User, current_user
+from app.security.auth import User, current_user, require_admin
 from app.security.db_models import AuditSession
+from app.security.policy import policy_engine
 from app.security.session import session_store
 from app.security.tickets import issue_ticket, verify_ticket
 from sqlalchemy.future import select
 import datetime
+import time
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# One question in flight per user. Without this, parallel requests are all judged
+# against the same not-yet-updated risk score and slip past the policy.
+# ponytail: in-process locks; use a shared lock (e.g. Redis) if run with several workers.
+_user_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     session_token: Optional[str] = None
-    llm_provider: Optional[str] = None
 
 class ChatResponse(BaseModel):
     answer: str
@@ -33,10 +41,19 @@ class ChatResponse(BaseModel):
     telemetry: Optional[Dict[str, Any]] = None
     graph_data: Optional[Dict[str, Any]] = None
     llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
 
 @router.get("/me")
 async def me(user: User = Depends(current_user)):
-    return {"user_id": user.user_id, "role": user.role}
+    """Who is signed in, plus the risk and policy their next query will face."""
+    risk = session_store.decayed_risk(user.user_id, time.time())
+    policy = policy_engine.calculate_policy(risk, user.role)
+    return {
+        "user_id": user.user_id,
+        "role": user.role,
+        "risk_score": risk,
+        "response_mode": policy.response_mode.value,
+    }
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, user: User = Depends(current_user)):
@@ -48,6 +65,14 @@ async def chat_endpoint(request: ChatRequest, user: User = Depends(current_user)
     audit trail; the user's remembered risk is keyed by user id, so dropping
     the ticket does not reset it.
     """
+    lock = _user_locks[user.user_id]
+    if lock.locked():
+        raise HTTPException(status_code=429, detail="Please wait for your previous question to finish.")
+    async with lock:
+        return await _answer(request, user)
+
+
+async def _answer(request: ChatRequest, user: User) -> ChatResponse:
     session_id = (verify_ticket(request.session_token, user.user_id) if request.session_token else None) or str(uuid.uuid4())
 
     logger.info(f"Chat request: user={user.user_id} session={session_id} role={user.role}")
@@ -57,8 +82,8 @@ async def chat_endpoint(request: ChatRequest, user: User = Depends(current_user)
             request.query,
             session_id=session_id,
             role=user.role,
-            llm_provider=request.llm_provider,
             user_id=user.user_id,
+            user_email=user.email,
         )
 
         token, session_id = issue_ticket(user.user_id, session_id=session_id)
@@ -72,6 +97,7 @@ async def chat_endpoint(request: ChatRequest, user: User = Depends(current_user)
             telemetry=rag_result.get("telemetry", None),
             graph_data=rag_result.get("graph_data", None),
             llm_provider=rag_result.get("llm_provider", None),
+            llm_model=settings.OLLAMA_MODEL,
             status="success"
         )
     except Exception as e:
@@ -97,8 +123,10 @@ async def end_own_session(ref: SessionRef, user: User = Depends(current_user)):
     return {"status": "success"}
 
 @router.post("/session/reset")
-async def reset_risk(user: User = Depends(current_user)):
-    """Demo convenience: forget the caller's remembered risk. Off unless DEMO_ALLOW_RISK_RESET=true."""
+async def reset_risk(user: User = Depends(require_admin)):
+    """Demo convenience for Auditors: forget their own remembered risk. Off unless
+    DEMO_ALLOW_RISK_RESET=true. Never open to ordinary users, or anyone could
+    wipe their risk score and dodge the policy."""
     if not settings.DEMO_ALLOW_RISK_RESET:
         raise HTTPException(status_code=403, detail="Risk reset is disabled")
     session_store.reset(user.user_id)

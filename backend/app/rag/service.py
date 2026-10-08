@@ -47,6 +47,7 @@ class GraphRAGService:
         role: str = "Standard",
         llm_provider: str | None = None,
         user_id: str | None = None,
+        user_email: str | None = None,
     ) -> dict:
         """
         Executes the Graph-RAG pipeline with a selectable LLM provider.
@@ -62,7 +63,7 @@ class GraphRAGService:
         logger.info(f"GraphRAGService processing query: {query!r} for session: {session_id}, provider: {provider_tag}")
         
         # ── Security: Pre-retrieval Observation (Phase 4A/4C) ──
-        security_ctx = await aegis_security.observe_query(session_id, query, role, user_id)
+        security_ctx = await aegis_security.observe_query(session_id, query, role, user_id, user_email)
         policy = security_ctx["policy"]
         
         logger.info(f"Adaptive Policy applied: Level={policy.risk_level.value}, Limit={policy.effective_context_limit}, Depth={policy.effective_graph_depth}")

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # Ollama Settings
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "qwen2.5-coder:7b"
+    OLLAMA_MODEL: str = "llama3.1:8b"
 
     # Context Builder Settings
     MAX_RECORDS: int = 20
@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     # Demo convenience: lets a signed-in user reset their own remembered risk
     # (the "New Session" button). Keep False outside local demos.
     DEMO_ALLOW_RISK_RESET: bool = False
+
+    # Admin security alerts. A channel is off while its settings are blank.
+    # Telegram: token from @BotFather; chat id of the admin's chat with the bot.
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    # Email via SMTP (Gmail: an App Password, not the account password).
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    ALERT_EMAIL_TO: str = ""
 
     # Security & Telemetry Settings
     # Server-only secret used to sign session tickets (required: set in .env).

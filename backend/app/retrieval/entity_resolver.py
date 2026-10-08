@@ -8,7 +8,12 @@ Never silently picks between ambiguous matches.
 import re
 from typing import Optional
 from app.retrieval.schemas import ResolvedEntity, ResolutionStatus
-from app.retrieval.strategies import retrieval_strategies
+import os
+
+if os.getenv("USE_POSTGRES_RETRIEVAL", "false").lower() == "true":
+    from app.retrieval.postgres_strategies import postgres_retrieval_strategies as retrieval_strategies
+else:
+    from app.retrieval.strategies import retrieval_strategies
 import logging
 
 logger = logging.getLogger(__name__)
@@ -76,7 +81,7 @@ class EntityResolver:
                 "look", "up", "search", "for", "the", "about", "tell", "me",
                 "does", "communicate", "with", "frequently", "topics", "frequent",
                 "mention", "belong", "to", "organization", "info", "information",
-                "were", "was", "discussed"
+                "were", "was", "discussed", "has", "have", "had"
             ]
             for word in stopwords:
                 name_hint = re.sub(rf"\b{word}\b", "", name_hint)
@@ -102,7 +107,21 @@ class EntityResolver:
                 status=ResolutionStatus.AMBIGUOUS,
                 matches=results,
             )
-            
+
+        # Typo-tolerant search before letting the LLM guess spellings.
+        fuzzy = await self.strategies.fuzzy_lookup_employee(name_hint, limit=5)
+        if fuzzy:
+            # ponytail: a 5% score lead picks one person; tied scores usually mean one person
+            # under several Enron addresses, so ask the user. Merge identities if that gets annoying.
+            clear_leader = len(fuzzy) == 1 or fuzzy[0]["score"] >= fuzzy[1]["score"] * 1.05
+            chosen = fuzzy[:1] if clear_leader else fuzzy
+            return ResolvedEntity(
+                type="employee",
+                query_value=name_hint,
+                status=ResolutionStatus.FOUND if clear_leader else ResolutionStatus.AMBIGUOUS,
+                matches=[{"email": m["email"], "name": m["name"]} for m in chosen],
+            )
+
         # 3. LLM Fallback if NOT_FOUND deterministically
         logger.debug(f"Deterministic entity resolution failed for {query!r}. Attempting LLM fallback.")
         if not extracted_params:
@@ -164,14 +183,7 @@ class EntityResolver:
         if not clean_name:
             clean_name = name.strip()
             
-        query = """
-        MATCH (t:Topic)
-        WHERE toLower(t.name) CONTAINS toLower($name)
-        RETURN t.name AS entity_id, t.name AS entity_name,
-               'Topic' AS entity_type
-        LIMIT 5
-        """
-        results = await self.strategies.db.execute_read(query, {"name": clean_name})
+        results = await self.strategies.resolve_topic(clean_name)
 
         if len(results) == 1:
             return ResolvedEntity(

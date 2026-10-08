@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8001/api/v1';
+// Set VITE_API_URL in frontend/.env to point at another backend.
+const API_BASE = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8001'}/api/v1`;
+
+// Mirrors backend/app/security/policy.py: LOW < 0.35 <= MEDIUM < 0.65 <= HIGH.
+export const RISK_BANDS = { medium: 0.35, high: 0.65 };
+export const riskLevelOf = (risk: number): 'LOW' | 'MEDIUM' | 'HIGH' =>
+  risk >= RISK_BANDS.high ? 'HIGH' : risk >= RISK_BANDS.medium ? 'MEDIUM' : 'LOW';
 
 // Every request carries the signed-in user's Clerk session token; the backend
 // verifies it and decides the user's role. Nothing here can choose a role.
@@ -40,7 +46,7 @@ export interface TelemetryEvent {
   signals: SignalValues;
   instantaneous_risk: number;
   smoothed_risk: number;
-  policy: AdaptivePolicy;
+  policy?: AdaptivePolicy;
   blocked_by_policy: boolean;
   role: string;
   response_mode: 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
@@ -82,7 +88,20 @@ export interface ChatResponse {
   telemetry: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
   llm_provider?: string;
+  llm_model?: string;
 }
+
+export type ResponseMode = 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
+
+export interface Identity {
+  user_id: string;
+  role: string;
+  // Remembered risk (after idle decay) and the policy the next query will face.
+  risk_score: number;
+  response_mode: ResponseMode;
+}
+
+export const ADMIN_ROLE = 'Auditor';
 
 export const chatApi = {
   async sendMessage(
@@ -97,8 +116,8 @@ export const chatApi = {
     return response.data;
   },
 
-  async me(): Promise<{ user_id: string; role: string }> {
-    return (await axios.get(`${API_BASE}/me`)).data;
+  async me(): Promise<Identity> {
+    return (await axios.get<Identity>(`${API_BASE}/me`)).data;
   },
 
   async endSession(sessionToken: string): Promise<void> {
@@ -114,6 +133,8 @@ export const chatApi = {
 export interface AuditSession {
   session_id: string;
   role: string;
+  user_id: string | null;
+  user_email: string | null;
   started_at: string;
   ended_at: string | null;
   status: string;
@@ -126,10 +147,12 @@ export interface AuditSession {
 
 export interface AuditQuery {
   id: string;
+  session_id: string;
   timestamp: string;
   query: string;
   intent: string;
   risk_score: number;
+  instantaneous_risk: number | null;
   behavioral_mode: string;
   retrieval_outcome: string;
   masked: boolean;
@@ -137,7 +160,11 @@ export interface AuditQuery {
   blocked: boolean;
   result_count: number;
   role: string;
+  user_id: string | null;
+  user_email: string | null;
   llm_provider: string;
+  signals: SignalValues | null;
+  policy: AdaptivePolicy | null;
 }
 
 export const auditApi = {
@@ -145,9 +172,48 @@ export const auditApi = {
     const response = await axios.get<{sessions: AuditSession[]}>(`${API_BASE}/audit/sessions?limit=${limit}`);
     return response.data.sessions;
   },
-  
+
   async getSessionQueries(sessionId: string): Promise<AuditQuery[]> {
     const response = await axios.get<{queries: AuditQuery[]}>(`${API_BASE}/audit/sessions/${sessionId}/queries`);
     return response.data.queries;
   },
+
+  // Most recent queries across ALL users/sessions, newest first — the admin live feed.
+  // Pass userId for one user's history (the admin user detail page).
+  async getRecent(limit: number = 50, userId?: string): Promise<AuditQuery[]> {
+    const response = await axios.get<{queries: AuditQuery[]}>(`${API_BASE}/audit/recent`, { params: { limit, user_id: userId } });
+    return response.data.queries;
+  },
+
+  async alertChannels(): Promise<string[]> {
+    return (await axios.get<{channels: string[]}>(`${API_BASE}/audit/alerts/status`)).data.channels;
+  },
+
+  async sendTestAlert(): Promise<Record<string, string>> {
+    return (await axios.post<{results: Record<string, string>}>(`${API_BASE}/audit/alerts/test`)).data.results;
+  },
 };
+
+// Reshape a stored audit row into the live telemetry shape that
+// SecurityPanel / RiskTimeline render.
+export function auditToTelemetry(q: AuditQuery): TelemetryEvent {
+  return {
+    session_id: q.session_id,
+    timestamp: new Date(q.timestamp).getTime() / 1000,
+    query: q.query,
+    intent: q.intent,
+    retrieval_strategy: q.retrieval_outcome,
+    result_count: q.result_count,
+    signals: q.signals ?? { semantic_focus: 0, temporal_frequency: 0, entity_focus: 0, graph_footprint: 0 },
+    instantaneous_risk: q.instantaneous_risk ?? q.risk_score,
+    smoothed_risk: q.risk_score,
+    policy: q.policy ?? undefined,
+    blocked_by_policy: q.blocked,
+    role: q.role,
+    response_mode: q.behavioral_mode as ResponseMode,
+  };
+}
+
+// Who asked: the email when Clerk provides it, otherwise the Clerk user id.
+export const whoOf = (row: { user_email: string | null; user_id: string | null }) =>
+  row.user_email || row.user_id || 'unknown user';

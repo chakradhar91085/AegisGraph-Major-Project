@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 import datetime
 import uuid
@@ -12,6 +12,8 @@ class AuditSession(Base):
     
     id = Column(String, primary_key=True) # Maps to session_id
     role = Column(String, nullable=False, default="Standard")
+    user_id = Column(String, nullable=True)
+    user_email = Column(String, nullable=True)
     started_at = Column(DateTime, default=get_utc_now)
     ended_at = Column(DateTime, nullable=True)
     status = Column(String, default="ACTIVE") # ACTIVE, COMPLETED
@@ -47,6 +49,14 @@ class AuditQuery(Base):
     
     result_count = Column(Integer, default=0)
     role = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
+    user_email = Column(String, nullable=True)
     llm_provider = Column(String, nullable=True)
-    
+
+    # Full telemetry detail, previously computed but discarded — needed to
+    # drive a global (cross-user) live risk view for the admin dashboard.
+    instantaneous_risk = Column(Float, nullable=True)
+    signals = Column(JSON, nullable=True)
+    policy = Column(JSON, nullable=True)
+
     session = relationship("AuditSession", back_populates="queries")

@@ -43,6 +43,14 @@ class SessionStore:
         state = self.get_or_create_session(session_id)
         state.history.append(record)
 
+    def decayed_risk(self, session_id: str, now: float) -> float:
+        """Remembered risk after idle decay: it halves every SECURITY_RISK_HALF_LIFE_SECONDS."""
+        state = self.get_or_create_session(session_id)
+        if not state.last_seen:
+            return state.last_smoothed_risk
+        idle = now - state.last_seen
+        return state.last_smoothed_risk * 0.5 ** (idle / settings.SECURITY_RISK_HALF_LIFE_SECONDS)
+
     def update_smoothed_risk(self, session_id: str, risk: float):
         state = self.get_or_create_session(session_id)
         state.last_smoothed_risk = risk

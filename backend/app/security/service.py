@@ -8,13 +8,15 @@ from app.security.signals import signals_calculator
 from app.security.risk import risk_engine
 from app.security.policy import policy_engine
 from app.security.gates import gate_score
+from app.security.alerts import notify
+from app.security.audit import SEVERITY_ORDER
 from app.retrieval.schemas import RetrievalResponse
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 class AegisSecurityService:
-    async def observe_query(self, session_id: str, query: str, role: str = "Standard", user_id: str | None = None) -> Dict[str, Any]:
+    async def observe_query(self, session_id: str, query: str, role: str = "Standard", user_id: str | None = None, user_email: str | None = None) -> Dict[str, Any]:
         """
         Step 1: Pre-retrieval observation.
         Fetches embedding, calculates the semantic-focus signal over the
@@ -35,9 +37,7 @@ class AegisSecurityService:
         # Semantic focus looks at a small sliding window of recent queries
         # (paper Eq. 1), not just the single previous one.
         state = session_store.get_or_create_session(risk_key)
-        if state.last_seen:
-            idle = current_time - state.last_seen
-            state.last_smoothed_risk *= 0.5 ** (idle / settings.SECURITY_RISK_HALF_LIFE_SECONDS)
+        state.last_smoothed_risk = session_store.decayed_risk(risk_key, current_time)
         state.last_seen = current_time
         window_size = settings.SECURITY_SEMANTIC_WINDOW_SIZE
         prior_count = max(0, window_size - 1)
@@ -56,6 +56,8 @@ class AegisSecurityService:
         return {
             "session_id": session_id,
             "risk_key": risk_key,
+            "user_id": user_id,
+            "user_email": user_email,
             "gate": gate,
             "query": query,
             "role": role,
@@ -132,7 +134,9 @@ class AegisSecurityService:
         session_store.add_query_record(risk_key, record)
         session_store.update_smoothed_risk(risk_key, smoothed_risk)
         retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "restricted_by_policy", "none", "error")
-        
+
+        self._alert_admin(ctx, state, smoothed_risk)
+
         # Return Telemetry
         return TelemetryEvent(
             session_id=session_id,
@@ -148,8 +152,43 @@ class AegisSecurityService:
             blocked_by_policy=(retrieval_response.strategy == "blocked_by_policy" or ctx["policy"].response_mode == "BLOCK"),
             retrieval_executed=retrieval_executed,
             role=ctx.get("role", "Standard"),
+            user_id=ctx.get("user_id"),
+            user_email=ctx.get("user_email"),
             response_mode=ctx["policy"].response_mode
         )
+
+    @staticmethod
+    def _alert_admin(ctx: Dict[str, Any], state, smoothed_risk: float) -> None:
+        """Alert on a security-gate hit, or when a user's mode escalates (ALLOW -> MASK -> BLOCK)."""
+        mode = ctx["policy"].response_mode.value
+        escalated = SEVERITY_ORDER[mode] > SEVERITY_ORDER.get(state.last_mode, 0)
+        state.last_mode = mode
+
+        events = []
+        if ctx["gate"] >= 0.65:
+            events.append("Prompt-injection / privilege-escalation attempt detected")
+        elif ctx["gate"] > 0:
+            events.append("Bulk request for sensitive personal data detected")
+        if escalated and mode == "BLOCK":
+            events.append("Risk reached HIGH: this user's queries are now BLOCKED")
+        elif escalated and mode == "MASK":
+            events.append("Risk reached MEDIUM: names and emails are now MASKED for this user")
+        if not events:
+            return
+
+        who = ctx.get("user_email") or ctx.get("user_id") or f"session {ctx['session_id'][:8]}"
+        text = "\n".join(
+            [f"- {e}" for e in events]
+            + [
+                "",
+                f"User: {who} ({ctx.get('role', 'Standard')})",
+                f"Risk score: {smoothed_risk:.2f}",
+                f"Query: {ctx['query'][:300]}",
+                f"Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ctx['timestamp']))}",
+            ]
+        )
+        subject = "AegisGraph BLOCK alert" if mode == "BLOCK" else "AegisGraph security alert"
+        notify(subject, text)
 
 # Singleton
 aegis_security = AegisSecurityService()

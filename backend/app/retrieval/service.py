@@ -16,7 +16,13 @@ from app.retrieval.schemas import (
 )
 from app.retrieval.intent_classifier import classify_intent
 from app.retrieval.entity_resolver import entity_resolver
-from app.retrieval.strategies import retrieval_strategies
+import os
+
+if os.getenv("USE_POSTGRES_RETRIEVAL", "false").lower() == "true":
+    from app.retrieval.postgres_strategies import postgres_retrieval_strategies as retrieval_strategies
+else:
+    from app.retrieval.strategies import retrieval_strategies
+    
 import logging
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChat, type Message } from '../contexts/ChatContext';
-import { Send, Loader2, ShieldBan, ShieldCheck, Cpu, Database, Activity, MessagesSquare } from 'lucide-react';
+import { Send, Loader2, ShieldBan, Database, Network, ArrowRight, MessagesSquare } from 'lucide-react';
 import clsx from 'clsx';
+import { FormattedText } from './FormattedText';
+import { ModeBadge, explainSignals } from './ModeBadge';
+
+const INPUT_MAX_HEIGHT = 150;
+
+// Grow the textarea with its content, scrolling only once it hits the cap.
+function fitToContent(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, INPUT_MAX_HEIGHT)}px`;
+  el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+}
 
 interface ChatPanelProps {
   messages: Message[];
@@ -11,187 +23,163 @@ interface ChatPanelProps {
 }
 
 const QUICK_START_QUERIES = [
-  "What can I explore in this knowledge graph?",
-  "Who are the employees?",
-  "Who is Christopher Calger?",
-  "What emails did he send?"
+  'What can I explore in this knowledge graph?',
+  'Who are the employees?',
+  'Who is Christopher Calger?',
+  'What emails did he send?',
 ];
+
+function AgentMeta({ msg }: { msg: Message }) {
+  const { setActiveGraphData, activeGraphData } = useChat();
+  const t = msg.telemetry;
+  if (!t) return null;
+  const showing = activeGraphData === msg.graph_data;
+
+  return (
+    <div className="mt-3 border-t border-slate-800 pt-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <ModeBadge mode={t.response_mode} />
+        <span className="inline-flex items-center gap-1 rounded border border-slate-800 px-2 py-0.5 font-mono" title="Records retrieved from the knowledge graph">
+          <Database className="h-3 w-3" /> {t.result_count} records · {t.retrieval_strategy}
+        </span>
+        {msg.llm_model && (
+          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Local model via ${msg.llm_provider ?? 'ollama'}`}>
+            {msg.llm_model}
+          </span>
+        )}
+        {msg.graph_data && (
+          <button
+            onClick={() => setActiveGraphData(msg.graph_data!)}
+            className={clsx(
+              'inline-flex items-center gap-1 rounded border px-2 py-0.5 transition-colors',
+              showing ? 'border-blue-500/50 bg-blue-500/10 text-blue-400' : 'border-slate-700 hover:border-blue-500/50 hover:text-slate-50',
+            )}
+          >
+            <Network className="h-3 w-3" /> {showing ? 'Shown in graph' : 'Show in graph'}
+          </button>
+        )}
+      </div>
+      <details className="mt-2 text-xs text-slate-400">
+        <summary className="cursor-pointer select-none hover:text-slate-200">Why this policy?</summary>
+        <p className="mt-1.5 leading-relaxed">
+          Risk after this question: <span className="font-mono text-slate-200">{t.smoothed_risk.toFixed(2)}</span>{' '}
+          (this question alone: <span className="font-mono text-slate-200">{t.instantaneous_risk.toFixed(2)}</span>).{' '}
+          {explainSignals(t.signals)}
+        </p>
+      </details>
+    </div>
+  );
+}
 
 export function ChatPanel({ messages, loading, error, onSendMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { setActiveGraphData, activeGraphData } = useChat();
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Auto-focus input when loading finishes
   useEffect(() => {
-    if (!loading) {
-      inputRef.current?.focus();
-    }
+    if (!loading) inputRef.current?.focus();
   }, [loading]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Re-fit the box whenever the text changes (typing, or cleared after sending).
+  useEffect(() => {
+    fitToContent(inputRef.current);
+  }, [input]);
+
+  const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
     onSendMessage(input.trim());
     setInput('');
   };
 
-  const handleQuickStart = (query: string) => {
-    if (loading) return;
-    onSendMessage(query);
-  };
-
   return (
-    <div className="flex flex-col h-full bg-slate-950 relative">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <div className="w-16 h-16 bg-slate-900 rounded-lg flex items-center justify-center mb-6 border border-slate-800">
-              <MessagesSquare className="w-8 h-8 text-blue-500" />
-            </div>
-            <h2 className="text-xl font-display font-bold text-slate-50 uppercase tracking-widest mb-2">AegisGraph Terminal</h2>
-            <p className="text-center max-w-md mb-8 text-slate-400 leading-relaxed text-sm">
-              Interact with the Enron knowledge graph. All queries are continuously monitored for behavioral anomalies and evaluated against adaptive security policies.
-            </p>
-            
-            <div className="grid grid-cols-1 gap-3 w-full max-w-md">
-              {QUICK_START_QUERIES.map((query, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleQuickStart(query)}
-                  disabled={loading}
-                  className="text-left px-4 py-3 bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-lg transition-colors text-sm text-slate-50 font-medium flex items-center group disabled:opacity-50"
-                >
-                  <ArrowRightIcon className="w-4 h-4 mr-3 text-slate-500 group-hover:text-blue-500 transition-colors" />
-                  {query}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {messages.map((msg) => {
-          const isBlocked = msg.telemetry?.blocked_by_policy;
-          const telemetry = msg.telemetry;
-          
-          return (
-            <div 
-              key={msg.id} 
-              className={clsx(
-                "max-w-[85%] rounded-lg p-4 shadow-sm",
-                msg.sender === 'user' 
-                  ? "bg-slate-800 text-slate-50 self-end ml-auto border border-slate-700" 
-                  : isBlocked
-                    ? "bg-slate-900 text-red-500 border border-red-900/50 self-start w-full max-w-[90%]"
-                    : "bg-slate-900 text-slate-50 border border-slate-800 self-start w-full max-w-[90%]"
-              )}
-            >
-              {isBlocked && (
-                <div className="flex items-center text-red-500 font-bold text-[11px] font-mono mb-3 uppercase tracking-[0.1em] bg-red-950/20 p-2 rounded-md border border-red-900/30">
-                  <ShieldBan className="w-4 h-4 mr-2" />
-                  Request Blocked By Security Policy
-                </div>
-              )}
-              
-              <div className={clsx(
-                "text-sm leading-relaxed whitespace-pre-wrap", 
-                isBlocked ? "italic text-red-500/80 font-mono text-xs" : (msg.sender === 'user' ? "" : "text-slate-300")
-              )}>
-                {msg.text}
+    <div className="flex h-full flex-col bg-slate-950">
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center pt-[10vh] text-center">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-lg border border-slate-800 bg-slate-900">
+                <MessagesSquare className="h-7 w-7 text-blue-500" />
               </div>
+              <h2 className="mb-2 text-xl font-semibold text-slate-50">Ask the Enron knowledge graph</h2>
+              <p className="mb-8 max-w-md text-sm leading-relaxed text-slate-400">
+                Every question is checked for risky behaviour. If your pattern looks like data harvesting, names get masked and, at high risk, answers are blocked.
+              </p>
+              <div className="grid w-full max-w-md gap-2">
+                {QUICK_START_QUERIES.map((query) => (
+                  <button
+                    key={query}
+                    onClick={() => !loading && onSendMessage(query)}
+                    disabled={loading}
+                    className="group flex items-center rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:border-blue-500/50 disabled:opacity-50"
+                  >
+                    <ArrowRight className="mr-3 h-4 w-4 text-slate-500 group-hover:text-blue-500" />
+                    {query}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-              {/* Sub-Metadata for Agent Responses */}
-              {msg.sender === 'agent' && telemetry && !isBlocked && (
-                <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-4 text-[10px] text-slate-400 font-mono uppercase tracking-[0.1em]">
-                  {msg.llm_provider && (
-                    <div className={`flex items-center px-1.5 py-0.5 rounded-sm ${
-                      msg.llm_provider === 'ollama' 
-                        ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-900/40' 
-                        : 'bg-blue-950/30 text-blue-400 border border-blue-900/40'
-                    }`} title="LLM Provider">
-                      Qwen 7B
-                    </div>
-                  )}
-                  <div className="flex items-center" title="Records Retrieved">
-                    <Database className="w-3 h-3 mr-1.5 text-slate-500" />
-                    {telemetry.result_count} records
-                  </div>
-                  <div className="flex items-center" title="Retrieval Strategy">
-                    <Cpu className="w-3 h-3 mr-1.5 text-slate-500" />
-                    {telemetry.retrieval_strategy}
-                  </div>
-                  <div className="flex items-center" title="Instantaneous Risk">
-                    <Activity className="w-3 h-3 mr-1.5 text-slate-500" />
-                    Risk: <span className="text-slate-50 ml-1">{telemetry.instantaneous_risk.toFixed(2)}</span>
-                  </div>
-                  {telemetry.policy?.risk_level === 'MEDIUM' && (
-                    <div className="flex items-center text-amber-500 bg-amber-950/20 px-2 py-0.5 rounded-sm border border-amber-900/30">
-                      <ShieldCheck className="w-3 h-3 mr-1.5" />
-                      Policy Constrained
-                    </div>
-                  )}
-                  {msg.graph_data && (
-                    <button
-                      onClick={() => setActiveGraphData(msg.graph_data!)}
-                      className={clsx(
-                        "flex items-center px-2 py-0.5 rounded-sm border transition-colors cursor-pointer",
-                        activeGraphData === msg.graph_data 
-                          ? "bg-blue-500/20 text-blue-500 border-blue-500/50" 
-                          : "bg-slate-800 text-slate-400 border-slate-700 hover:border-blue-500/50 hover:text-slate-50"
-                      )}
-                      title="Visualize this graph"
-                    >
-                      <Activity className="w-3 h-3 mr-1.5" />
-                      {activeGraphData === msg.graph_data ? 'Visualizing Graph' : 'Visualize Graph'}
-                    </button>
-                  )}
+          {messages.map((msg) => {
+            const blocked = msg.telemetry?.blocked_by_policy;
+            if (msg.sender === 'user') {
+              return (
+                <div key={msg.id} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-50">
+                  {msg.text}
                 </div>
-              )}
-            </div>
-          );
-        })}
-        
-        {loading && (
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 w-full max-w-[60%] flex items-center space-x-4">
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <Loader2 className="w-4 h-4 animate-spin text-blue-500 absolute" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-[0.1em] text-slate-50">Analyzing Request...</span>
-              <span className="text-[10px] text-slate-400 font-mono tracking-wider mt-0.5">Evaluating behavioral risk and retrieving context</span>
-            </div>
-          </div>
-        )}
+              );
+            }
+            return (
+              <div
+                key={msg.id}
+                className={clsx('rounded-lg border px-4 py-3', blocked ? 'border-red-900/60 bg-red-950/20' : 'border-slate-800 bg-slate-900')}
+              >
+                {blocked && (
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-red-400">
+                    <ShieldBan className="h-4 w-4" /> Blocked by security policy
+                  </div>
+                )}
+                <div className={clsx('whitespace-pre-wrap text-sm leading-relaxed', blocked ? 'text-red-300' : 'text-slate-200')}>
+                  <FormattedText text={msg.text} />
+                </div>
+                <AgentMeta msg={msg} />
+              </div>
+            );
+          })}
 
-        {error && (
-          <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-4 w-full max-w-[80%] flex items-center space-x-4">
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <ShieldBan className="w-4 h-4 text-red-500 absolute" />
+          {loading && (
+            <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" role="status">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+              <div>
+                <div className="text-sm text-slate-100">Checking risk and searching the graph…</div>
+                <div className="text-xs text-slate-400">Local models can take up to a minute.</div>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-[0.1em] text-red-400">Connection Failed</span>
-              <span className="text-[11px] text-red-500/80 font-mono mt-0.5">{error}</span>
-            </div>
-          </div>
-        )}
+          )}
 
-        <div ref={messagesEndRef} />
+          {error && (
+            <div className="flex items-center gap-3 rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3" role="alert">
+              <ShieldBan className="h-4 w-4 shrink-0 text-red-400" />
+              <span className="text-sm text-red-300">{error}</span>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-slate-950 border-t border-slate-800 shrink-0 relative z-10">
-        <form onSubmit={handleSubmit} className="relative flex items-end max-w-4xl mx-auto">
+      <div className="shrink-0 border-t border-slate-800 p-4">
+        <form onSubmit={handleSubmit} className="relative mx-auto flex max-w-3xl items-end">
           <textarea
             ref={inputRef}
-            className="w-full pl-4 pr-16 py-3.5 bg-slate-900 border border-slate-800 text-slate-50 focus:outline-none focus:border-blue-500 resize-none overflow-hidden transition-colors rounded-lg font-sans text-sm"
-            placeholder="Enter query..."
+            aria-label="Your question"
+            className="w-full resize-none overflow-hidden rounded-lg border border-slate-700 bg-slate-900 py-3.5 pl-4 pr-14 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+            placeholder="Ask about a person, their emails or a topic…"
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -202,30 +190,19 @@ export function ChatPanel({ messages, loading, error, onSendMessage }: ChatPanel
               }
             }}
             disabled={loading}
-            style={{ minHeight: '52px', maxHeight: '150px' }}
+            style={{ minHeight: '52px', maxHeight: `${INPUT_MAX_HEIGHT}px` }}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="absolute right-2 bottom-2 bg-blue-600 text-white rounded-md p-2 hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center justify-center"
+            aria-label="Send"
+            className="absolute bottom-2 right-2 flex items-center justify-center rounded-md bg-blue-600 p-2 text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
           >
-            <Send className="w-4 h-4" />
+            <Send className="h-4 w-4" />
           </button>
         </form>
-        <div className="text-center mt-3">
-          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.2em]">AegisGraph Security Intercept Active</span>
-        </div>
+        <p className="mt-2 text-center text-xs text-slate-500">Enter to send · Shift+Enter for a new line</p>
       </div>
     </div>
-  );
-}
-
-// Simple internal icon for quick starts
-function ArrowRightIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14" />
-      <path d="m12 5 7 7-7 7" />
-    </svg>
   );
 }

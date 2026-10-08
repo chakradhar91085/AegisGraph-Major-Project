@@ -49,14 +49,11 @@ export function FooterSection() {
               Project
             </h4>
             <nav className="flex flex-col gap-3">
-              <a href="#" className="text-slate-400 hover:text-blue-400 text-sm font-sans transition-colors">
-                Research
+              <a href="https://github.com/chakradhar91085/AegisGraph-Core-Architecture" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-400 text-sm font-sans transition-colors">
+                Source Code
               </a>
-              <a href="#" className="text-slate-400 hover:text-blue-400 text-sm font-sans transition-colors">
+              <a href="https://github.com/chakradhar91085/AegisGraph-Core-Architecture/blob/master/backend/docs/AegisGraph_Technical_Architecture.md" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-400 text-sm font-sans transition-colors">
                 Documentation
-              </a>
-              <a href="#" className="text-slate-400 hover:text-blue-400 text-sm font-sans transition-colors">
-                About
               </a>
             </nav>
           </div>

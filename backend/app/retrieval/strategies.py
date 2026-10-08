@@ -9,6 +9,7 @@ SCHEMA (actual ingested data):
   Rels:    SENT (Person->Email), SENT_TO (Email->Person), CC_TO (Email->Person),
            DISCUSSES (Email->Topic), REPLY_TO (Email->Email)
 """
+import re
 from typing import List, Dict, Any
 from app.db.neo4j import neo4j_client
 import logging
@@ -16,6 +17,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = 50  # Hard ceiling for any retrieval operation
+
+
+def fuzzy_search_terms(name: str) -> str:
+    """Lucene query where every name word must match, allowing 1 typo in short
+    words and 2 in longer ones ("christopher calgar" finds "christopher.calger")."""
+    terms = []
+    for word in re.findall(r"[a-z0-9]+", name.lower()):
+        if len(word) < 2:
+            continue
+        typos = "~" if len(word) >= 5 else "~1" if len(word) >= 3 else ""
+        terms.append(f"+{word}{typos}")
+    return " ".join(terms)
 
 
 class RetrievalStrategies:
@@ -64,6 +77,29 @@ class RetrievalStrategies:
         """
         return await self.db.execute_read(
             query, {"name": name.strip(), "limit": self._cap_limit(limit)}
+        )
+
+    async def ensure_person_fuzzy_index(self) -> None:
+        """Create the full-text index fuzzy_lookup_employee relies on (idempotent).
+        The 'simple' analyzer splits emails on punctuation, so each name part is its own word."""
+        await self.db.execute_read(
+            "CREATE FULLTEXT INDEX person_name_fuzzy IF NOT EXISTS "
+            "FOR (p:Person) ON EACH [p.email, p.name] "
+            "OPTIONS {indexConfig: {`fulltext.analyzer`: 'simple'}}"
+        )
+
+    async def fuzzy_lookup_employee(self, name: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Typo-tolerant Person search, best match first (includes a relevance score)."""
+        search = fuzzy_search_terms(name)
+        if not search:
+            return []
+        query = """
+        CALL db.index.fulltext.queryNodes('person_name_fuzzy', $search) YIELD node, score
+        RETURN node.email AS email, node.name AS name, score
+        LIMIT $limit
+        """
+        return await self.db.execute_read(
+            query, {"search": search, "limit": self._cap_limit(limit)}
         )
 
     # ------------------------------------------------------------------
@@ -179,6 +215,16 @@ class RetrievalStrategies:
         return await self.db.execute_read(
             query, {"embedding": embedding, "limit": self._cap_limit(limit)}
         )
+
+    async def resolve_topic(self, name: str) -> List[Dict[str, Any]]:
+        query = """
+        MATCH (t:Topic)
+        WHERE toLower(t.name) CONTAINS toLower($name)
+        RETURN t.name AS entity_id, t.name AS entity_name,
+               'Topic' AS entity_type
+        LIMIT 5
+        """
+        return await self.db.execute_read(query, {"name": name})
 
 # Module-level singleton
 retrieval_strategies = RetrievalStrategies()

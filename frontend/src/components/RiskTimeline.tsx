@@ -1,9 +1,25 @@
-import type { TelemetryEvent } from '../api';
+import { RISK_BANDS, type TelemetryEvent } from '../api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 interface RiskTimelineProps {
   history: TelemetryEvent[];
 }
+
+// Defined outside the component so Recharts doesn't remount it every render.
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const dataPoint = payload[0].payload;
+    return (
+      <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg shadow-md text-xs font-mono uppercase tracking-widest text-slate-400">
+        <p className="font-bold text-slate-50 mb-2 border-b border-slate-800 pb-1">{label}</p>
+        <p className="text-amber-500 mb-1">EWMA Risk: {dataPoint.ewmaRisk}</p>
+        <p className="text-blue-500">Instant Risk: {dataPoint.instantRisk}</p>
+        {dataPoint.blocked && <p className="text-red-500 mt-2 font-bold bg-red-950/30 px-1 py-0.5 border border-red-900/50 inline-block rounded-sm">BLOCKED</p>}
+      </div>
+    );
+  }
+  return null;
+};
 
 export function RiskTimeline({ history }: RiskTimelineProps) {
   if (!history || history.length === 0) {
@@ -22,20 +38,6 @@ export function RiskTimeline({ history }: RiskTimelineProps) {
     blocked: event.blocked_by_policy,
   }));
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const dataPoint = payload[0].payload;
-      return (
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg shadow-md text-[10px] font-mono uppercase tracking-widest text-slate-400">
-          <p className="font-bold text-slate-50 mb-2 border-b border-slate-800 pb-1">{label}</p>
-          <p className="text-amber-500 mb-1">EWMA Risk: {dataPoint.ewmaRisk}</p>
-          <p className="text-blue-500">Instant Risk: {dataPoint.instantRisk}</p>
-          {dataPoint.blocked && <p className="text-red-500 mt-2 font-bold bg-red-950/30 px-1 py-0.5 border border-red-900/50 inline-block rounded-sm">BLOCKED</p>}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="h-56 w-full mt-4">
@@ -62,9 +64,9 @@ export function RiskTimeline({ history }: RiskTimelineProps) {
           />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#1e293b', strokeWidth: 1, strokeDasharray: '4 4' }} />
           
-          {/* Threshold references based on backend typical values */}
-          <ReferenceLine y={0.25} stroke="#f59e0b" strokeOpacity={0.2} strokeDasharray="3 3" />
-          <ReferenceLine y={0.7} stroke="#ef4444" strokeOpacity={0.2} strokeDasharray="3 3" />
+          {/* Policy bands: MASK from 0.35, BLOCK from 0.65 */}
+          <ReferenceLine y={RISK_BANDS.medium} stroke="#f59e0b" strokeOpacity={0.5} strokeDasharray="3 3" />
+          <ReferenceLine y={RISK_BANDS.high} stroke="#ef4444" strokeOpacity={0.5} strokeDasharray="3 3" />
           
           <Line 
             type="monotone" 

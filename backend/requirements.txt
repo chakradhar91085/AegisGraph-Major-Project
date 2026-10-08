@@ -1,12 +1,16 @@
-fastapi>=0.109.0
-uvicorn>=0.27.0
-neo4j>=5.17.0
-httpx>=0.26.0
-python-dotenv>=1.0.1
-pydantic>=2.6.0
-pydantic-settings>=2.1.0
-sentence-transformers
-sqlalchemy>=2.0.25
-asyncpg>=0.29.0
+# Pinned to the versions this project was tested with (pip freeze, 2026-10-07).
+fastapi==0.141.1
+uvicorn==0.52.4
+neo4j==6.2.0
+httpx==0.28.1
+python-dotenv==1.2.3
+pydantic==2.13.4
+pydantic-settings==2.15.0
+sentence-transformers==6.0.0
+SQLAlchemy==2.0.52
+asyncpg==0.31.0
+PyJWT==2.15.0
+cryptography==50.0.1  # PyJWT needs it to verify Clerk's RS256 tokens
 
-pyjwt>=2.8
+# Only the offline ingestion pipeline (app/ingestion) uses spaCy, not the API.
+spacy==3.8.16

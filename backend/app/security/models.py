@@ -41,6 +41,8 @@ class TelemetryEvent(BaseModel):
     blocked_by_policy: bool = False
     retrieval_executed: bool = False
     role: str = "Standard"
+    user_id: Optional[str] = None
+    user_email: Optional[str] = None
     response_mode: ResponseMode = ResponseMode.ALLOW
 
 class QueryRecord(BaseModel):
@@ -55,3 +57,5 @@ class SessionState(BaseModel):
     last_smoothed_risk: float = 0.0
     last_seen: float = 0.0
     last_entity: Optional[str] = None
+    # Mode of the previous query, so alerts fire on escalation, not every query.
+    last_mode: str = "ALLOW"

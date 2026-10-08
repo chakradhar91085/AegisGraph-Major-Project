@@ -26,6 +26,8 @@ _jwks_client: PyJWKClient | None = None
 class User:
     user_id: str
     role: str
+    # Present only if the Clerk session token is customized to include it.
+    email: str | None = None
 
 
 def _signing_key(token: str):
@@ -68,7 +70,7 @@ async def current_user(request: Request) -> User:
     if claims.get("azp") and claims["azp"] not in allowed_origins:
         raise HTTPException(status_code=401, detail="Token was issued for a different app")
 
-    return User(user_id=claims["sub"], role=_role_for(claims["sub"]))
+    return User(user_id=claims["sub"], role=_role_for(claims["sub"]), email=claims.get("email"))
 
 
 async def require_admin(user: User = Depends(current_user)) -> User:

@@ -1,113 +1,78 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Network, Activity, X } from 'lucide-react';
+import clsx from 'clsx';
 import { useChat } from '../contexts/ChatContext';
-import { chatApi } from '../api';
-import { Shield, ShieldAlert, Activity, User } from 'lucide-react';
+import type { TelemetryEvent } from '../api';
+import { useIdentity } from '../useIdentity';
 import { ChatPanel } from '../components/ChatPanel';
 import { NetworkGraph } from '../components/NetworkGraph';
+import { SecurityPanel } from '../components/SecurityPanel';
+import { ModeBadge } from '../components/ModeBadge';
+
+type Panel = 'graph' | 'risk' | null;
 
 export function QueryPlayground() {
   const { messages, loading, error, sendMessage } = useChat();
-  const [identity, setIdentity] = useState<{ user_id: string; role: string } | null>(null);
+  // Role and risk come from the server (risk is remembered per user and survives
+  // reloads); refetched after every message so the bar stays current.
+  const identity = useIdentity(messages.length);
+  // Desktop opens on the graph; small screens start with the chat alone.
+  const [panel, setPanel] = useState<Panel>(() => (window.matchMedia('(min-width: 1024px)').matches ? 'graph' : null));
 
-  // The role is assigned by the server from the signed-in account; it is shown, never chosen.
-  useEffect(() => {
-    chatApi.me().then(setIdentity).catch(() => setIdentity(null));
-  }, []);
+  const history: TelemetryEvent[] = messages.flatMap((m) => (m.telemetry ? [m.telemetry] : []));
+  const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
 
-  const telemetryHistory = messages
-    .filter(m => m.sender === 'agent' && m.telemetry)
-    .map(m => m.telemetry!);
-    
-  const telemetry = telemetryHistory.length > 0 ? telemetryHistory[telemetryHistory.length - 1] : null;
+  const tabButton = (p: Exclude<Panel, null>, label: string, Icon: typeof Network) => (
+    <button
+      onClick={() => toggle(p)}
+      aria-pressed={panel === p}
+      className={clsx(
+        'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+        panel === p ? 'border-blue-500/50 bg-blue-500/10 text-blue-400' : 'border-slate-700 text-slate-300 hover:bg-slate-800',
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" /> {label}
+    </button>
+  );
 
-  const isBlocked = telemetry?.blocked_by_policy ?? false;
-  const riskScore = telemetry?.smoothed_risk ?? 0;
-  
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#050505] p-6 w-full mx-auto relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#2196f3] opacity-[0.03] blur-[100px] pointer-events-none rounded-full" />
-      
-      {/* Header */}
-      <div className="mb-6 flex items-end justify-between z-10 shrink-0">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-display font-bold text-[#f2ede6] uppercase tracking-wide">Secure Workspace</h1>
-            <div className="sys-tag">Intelligence</div>
-          </div>
-          <p className="text-sm text-[#8a8a8a] font-mono tracking-tight">
-            AEGISGRAPH // KNOWLEDGE RETRIEVAL TERMINAL
-          </p>
-        </div>
-      </div>
-
-      {/* Security & Controls Strip */}
-      <div className="mb-6 grid grid-cols-3 gap-4 z-10 shrink-0">
-        
-        {/* Role Selector Box */}
-        <div className="bg-[#0e0e0e] border border-[#1e1e1e] p-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 w-full">
-            <div className="w-8 h-8 rounded-sm bg-[#141414] border border-[#2e2e2e] flex items-center justify-center shrink-0">
-              <User className="w-4 h-4 text-[#8a8a8a]" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] text-[#5a5a5a] font-mono uppercase mb-0.5">Current Role</div>
-              <div className="text-sm font-mono font-medium text-[#2196f3]">{identity?.role ?? '...'}</div>
-              <div className="text-[9px] text-[#5a5a5a] font-mono truncate" title="Your Clerk user id (used in SECURITY_USER_ROLES)">{identity?.user_id ?? ''}</div>
-            </div>
-          </div>
-        </div>
-
-
-        {/* Live Risk Score Box */}
-        <div className="bg-[#0e0e0e] border border-[#1e1e1e] p-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-sm bg-[#141414] border border-[#2e2e2e] flex items-center justify-center shrink-0">
-              <Activity className="w-4 h-4 text-[#2196f3]" />
-            </div>
-            <div>
-              <div className="text-[10px] text-[#5a5a5a] font-mono uppercase">Live Risk Score</div>
-              <div className="text-sm font-mono font-medium text-[#2196f3]">{riskScore.toFixed(2)} / 1.00</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Policy Status Box */}
-        <div className="bg-[#0e0e0e] border border-[#1e1e1e] p-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-sm border flex items-center justify-center shrink-0 ${
-              isBlocked ? 'bg-red-950/30 border-red-900 text-red-500' :
-              riskScore > 0.6 ? 'bg-amber-950/30 border-amber-900 text-amber-500' :
-              'bg-green-950/30 border-green-900 text-green-500'
-            }`}>
-              {isBlocked ? <ShieldAlert className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-            </div>
-            <div>
-              <div className="text-[10px] text-[#5a5a5a] font-mono uppercase">Policy Status</div>
-              <div className={`text-sm font-mono font-medium ${
-                isBlocked ? 'text-red-500' :
-                riskScore > 0.6 ? 'text-amber-500' :
-                'text-green-500'
-              }`}>
-                {isBlocked ? 'RESTRICTED' : 'ENFORCING'}
+    <div className="flex min-h-0 flex-1">
+      {/* Chat column */}
+      <section className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 px-4">
+          <h1 className="text-sm font-semibold text-slate-50">Workspace</h1>
+          <div className="ml-auto flex items-center gap-2">
+            {identity && (
+              <div className="hidden items-center gap-2 sm:flex" title="Your remembered risk and the policy your next question will face">
+                <span className="rounded border border-slate-700 px-2 py-0.5 text-xs font-mono text-slate-300">{identity.role}</span>
+                <span className="text-xs font-mono text-slate-400">Risk {identity.risk_score.toFixed(2)}</span>
+                <ModeBadge mode={identity.response_mode} />
               </div>
-            </div>
+            )}
+            {identity === undefined && <span className="text-xs text-red-400">Server unreachable</span>}
+            {tabButton('graph', 'Graph', Network)}
+            {tabButton('risk', 'My risk', Activity)}
           </div>
-        </div>
-      </div>
-      
-      {/* Main Workspace (Split View) */}
-      <div className="flex-1 min-h-0 flex gap-4 relative z-10">
-        {/* Left Column: Graph Visualization */}
-        <div className="flex-[3] min-w-0 flex flex-col h-full">
-          <NetworkGraph />
-        </div>
-
-        {/* Right Column: Chat Interface */}
-        <div className="flex-[2] min-w-0 flex flex-col h-full bg-[#0a0a0a] border border-[#1e1e1e] shadow-2xl overflow-hidden rounded-sm">
+        </header>
+        <div className="min-h-0 flex-1">
           <ChatPanel messages={messages} loading={loading} error={error} onSendMessage={sendMessage} />
         </div>
-      </div>
+      </section>
+
+      {/* Side panel: docked on large screens, full-screen overlay on small ones */}
+      {panel && (
+        <aside className="fixed inset-0 z-40 flex flex-col bg-slate-950 lg:static lg:z-auto lg:w-[42%] lg:max-w-[640px] lg:border-l lg:border-slate-800">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 px-4">
+            <span className="text-sm font-semibold">{panel === 'graph' ? 'Knowledge graph' : 'My risk'}</span>
+            <button onClick={() => setPanel(null)} className="p-1 text-slate-400 hover:text-slate-50" aria-label="Close panel">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            {panel === 'graph' ? <NetworkGraph /> : <SecurityPanel telemetry={history.at(-1) ?? null} history={history} />}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

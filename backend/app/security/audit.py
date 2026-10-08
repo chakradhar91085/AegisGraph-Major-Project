@@ -55,6 +55,8 @@ class PostgresAuditLogger:
                     session = AuditSession(
                         id=session_id,
                         role=role,
+                        user_id=telemetry.get("user_id"),
+                        user_email=telemetry.get("user_email"),
                         started_at=dt_timestamp,
                         query_count=1,
                         final_risk_score=smoothed_risk,
@@ -91,7 +93,12 @@ class PostgresAuditLogger:
                     blocked=is_blocked,
                     result_count=telemetry.get("result_count", 0),
                     role=role,
-                    llm_provider=llm_provider
+                    user_id=telemetry.get("user_id"),
+                    user_email=telemetry.get("user_email"),
+                    llm_provider=llm_provider,
+                    instantaneous_risk=telemetry.get("instantaneous_risk", 0.0),
+                    signals=telemetry.get("signals"),
+                    policy=telemetry.get("policy"),
                 )
                 db.add(audit_query)
                 
