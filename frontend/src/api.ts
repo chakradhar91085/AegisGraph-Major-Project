@@ -52,9 +52,23 @@ export interface TelemetryEvent {
   response_mode: 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
 }
 
+export type LlmProvider = 'ollama' | 'openrouter';
+
 export interface ChatRequest {
   query: string;
   session_token?: string;
+  llm_provider?: LlmProvider;
+}
+
+export interface LlmProviderInfo {
+  id: LlmProvider;
+  model: string;
+  available: boolean;
+}
+
+export interface LlmProvidersResponse {
+  default: LlmProvider;
+  providers: LlmProviderInfo[];
 }
 
 export interface GraphNode {
@@ -107,13 +121,18 @@ export const chatApi = {
   async sendMessage(
     query: string,
     sessionToken?: string,
+    llmProvider?: LlmProvider,
   ): Promise<ChatResponse> {
-    const payload: ChatRequest = { query };
+    const payload: ChatRequest = { query, llm_provider: llmProvider };
     if (sessionToken) {
       payload.session_token = sessionToken;
     }
     const response = await axios.post<ChatResponse>(`${API_BASE}/chat`, payload);
     return response.data;
+  },
+
+  async llmProviders(): Promise<LlmProvidersResponse> {
+    return (await axios.get<LlmProvidersResponse>(`${API_BASE}/llm/providers`)).data;
   },
 
   async me(): Promise<Identity> {

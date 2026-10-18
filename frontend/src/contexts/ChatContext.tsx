@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
 import { chatApi } from '../api';
-import type { TelemetryEvent, GraphVisualizationPayload } from '../api';
+import type { TelemetryEvent, GraphVisualizationPayload, LlmProvider } from '../api';
 
 export interface Message {
   id: string;
@@ -33,6 +33,8 @@ interface ChatContextType {
   loading: boolean;
   error: string | null;
 
+  llmProvider: LlmProvider;
+  setLlmProvider: (p: LlmProvider) => void;
   sendMessage: (text: string) => Promise<void>;
   clearSession: () => void;
   resetConversation: () => void;
@@ -50,6 +52,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const [activeGraphData, setActiveGraphData] = useState<GraphVisualizationPayload | null>(null);
 
+  // Which model answers. Llama (Ollama) unless the user switches; remembered in this browser.
+  const [llmProvider, setLlmProviderState] = useState<LlmProvider>(() => {
+    try {
+      return localStorage.getItem('aegis_llm_provider') === 'openrouter' ? 'openrouter' : 'ollama';
+    } catch {
+      return 'ollama';
+    }
+  });
+  const setLlmProvider = useCallback((p: LlmProvider) => {
+    setLlmProviderState(p);
+    try {
+      localStorage.setItem('aegis_llm_provider', p);
+    } catch { /* storage blocked: the choice just won't persist */ }
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     const userMessage: Message = { id: Date.now().toString(), sender: 'user', text };
     setMessages((prev) => [...prev, userMessage]);
@@ -58,7 +75,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const sessionToken = sessionStorage.getItem('aegis_session_token') || undefined;
-      const response = await chatApi.sendMessage(text, sessionToken);
+      const response = await chatApi.sendMessage(text, sessionToken, llmProvider);
 
       // The server renews the ticket on every response; always store the
       // latest one so the session can continue securely.
@@ -86,7 +103,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [llmProvider]);
 
   // Forget the conversation in this browser tab (used on sign-out, so the next
   // person on the same browser never sees the previous user's chat).
@@ -118,7 +135,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContext.Provider value={{
-      messages, loading, error,
+      messages, loading, error, llmProvider, setLlmProvider,
       sendMessage, clearSession, resetConversation, endActiveSession,
       activeGraphData, setActiveGraphData
     }}>

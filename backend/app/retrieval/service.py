@@ -181,7 +181,7 @@ class RetrievalService:
             return await self._handle_person_connection(request, intent, extracted_params, llm_provider)
 
         elif intent == RetrievalIntent.SEMANTIC_SEARCH:
-            return await self._handle_semantic_search(request, intent)
+            return await self._handle_semantic_search(request, intent, llm_provider)
 
         # Should not reach here
         return RetrievalResponse(
@@ -487,11 +487,12 @@ class RetrievalService:
         )
 
     async def _handle_semantic_search(
-        self, request: RetrievalRequest, intent: RetrievalIntent
+        self, request: RetrievalRequest, intent: RetrievalIntent, llm_provider: str | None = None
     ) -> RetrievalResponse:
         """Handle semantic_search intent by embedding the query and doing vector search."""
         try:
-            if settings.LLM_PROVIDER.lower() == "ollama":
+            from app.llm.provider_factory import resolve_provider_name
+            if resolve_provider_name(llm_provider) == "ollama":
                 from app.llm.ollama_provider import OllamaProvider
                 embedding = await OllamaProvider().embed_query(request.query)
             else:
