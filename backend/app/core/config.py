@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
 
+    # OpenRouter Settings (used when LLM_PROVIDER=openrouter)
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "qwen/qwen3.7-flash"
+
     # Context Builder Settings
     MAX_RECORDS: int = 20
     MAX_CHUNK_CHARS: int = 1500

@@ -63,6 +63,8 @@ INTENT_RULES = [
         r"|(\bsent\s+(by|emails?|mail))"
         r"|(emails?\s+from\b)"
         r"|(emails?.*send)"
+        r"|((what|which|show|list|give).*\b(did|has|have)\b.*\b(sent|send|wrote|written|write)\b)"
+        r"|(\w['\u2019]s\s+(sent|outgoing)\s+(emails?|mail|messages?))"
         r"|(outbox)",
         re.IGNORECASE,
     ), RetrievalIntent.SENT_EMAILS),
@@ -73,6 +75,8 @@ INTENT_RULES = [
         r"|(received\s+(by|emails?|mail))"
         r"|(emails?\s+to\b)"
         r"|(emails?.*receive)"
+        r"|((what|which|show|list|give).*\b(did|has|have)\b.*\b(receive|received|got|get)\b)"
+        r"|(\w['\u2019]s\s+(received|incoming)\s+(emails?|mail|messages?))"
         r"|(inbox)",
         re.IGNORECASE,
     ), RetrievalIntent.RECEIVED_EMAILS),

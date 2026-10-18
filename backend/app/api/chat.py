@@ -97,7 +97,7 @@ async def _answer(request: ChatRequest, user: User) -> ChatResponse:
             telemetry=rag_result.get("telemetry", None),
             graph_data=rag_result.get("graph_data", None),
             llm_provider=rag_result.get("llm_provider", None),
-            llm_model=settings.OLLAMA_MODEL,
+            llm_model=settings.OPENROUTER_MODEL if settings.LLM_PROVIDER.lower() == "openrouter" else settings.OLLAMA_MODEL,
             status="success"
         )
     except Exception as e:

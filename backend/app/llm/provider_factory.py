@@ -16,19 +16,21 @@ _providers: dict[str, BaseLLMProvider] = {}
 
 def get_llm_provider(provider_name: str | None = None) -> BaseLLMProvider:
     """
-    Return the LLM provider. Since Gemini was removed, this always returns Ollama.
-
-    Args:
-        provider_name: Ignored. Maintained for signature compatibility.
-
-    Returns:
-        A BaseLLMProvider instance.
+    Return the configured LLM provider singleton (settings.LLM_PROVIDER:
+    "ollama" or "openrouter"). The provider_name argument is ignored.
     """
-    name = "ollama"
+    name = settings.LLM_PROVIDER.lower()
 
     if name not in _providers:
-        from app.llm.ollama_provider import OllamaProvider
-        _providers[name] = OllamaProvider()
-        logger.info(f"Initialized OllamaProvider ({settings.OLLAMA_MODEL})")
+        if name == "openrouter":
+            from app.llm.openrouter_provider import OpenRouterProvider
+            _providers[name] = OpenRouterProvider()
+            logger.info(f"Initialized OpenRouterProvider ({settings.OPENROUTER_MODEL})")
+        else:
+            name = "ollama"
+            if name not in _providers:
+                from app.llm.ollama_provider import OllamaProvider
+                _providers[name] = OllamaProvider()
+                logger.info(f"Initialized OllamaProvider ({settings.OLLAMA_MODEL})")
 
     return _providers[name]

@@ -42,6 +42,69 @@ class EntityResolver:
         match = EMAIL_PATTERN.search(text)
         return match.group(0).lower() if match else None
 
+    # Words that carry the question, not the person's name.
+    _STOPWORDS = {
+        "what", "which", "whose", "whom", "who", "where", "when", "how", "many", "much",
+        "show", "give", "list", "get", "fetch", "display", "tell", "me", "us", "please",
+        "can", "could", "would", "you", "i", "we", "pls", "kindly", "need", "want", "like",
+        "is", "are", "was", "were", "be", "been", "do", "does", "did", "has", "have", "had",
+        "a", "an", "the", "of", "on", "in", "at", "all", "any", "some", "every", "recent",
+        "latest", "last", "first", "top", "his", "her", "their", "its", "my",
+        "email", "emails", "mail", "mails", "message", "messages", "inbox", "outbox",
+        "send", "sent", "sends", "sending", "receive", "received", "receives", "receiving",
+        "write", "wrote", "written", "got",
+        "find", "search", "look", "up", "lookup", "for", "about", "from", "to", "by", "with",
+        "employee", "employees", "person", "people", "user", "worker", "info", "information",
+        "details", "detail", "communicate", "communicates", "communicated", "communication",
+        "frequently", "frequent", "often", "most", "talk", "talks", "topics", "topic",
+        "mention", "mentions", "discussed", "discuss", "belong", "organization", "and", "or",
+        "s", "that", "this", "these", "those", "there", "it", "if", "so", "just", "also", "ever",
+    }
+
+    def clean_name_hint(self, query: str) -> str:
+        """Strip question words from a query, leaving the person's name."""
+        text = re.sub(r"['\u2019]s\b", "", query.lower())      # possessives: "lay's emails"
+        text = re.sub(r"[^\w\s@.]", " ", text)
+        words = [w.strip(".") for w in text.split()]
+        kept = [w for w in words if w and w not in self._STOPWORDS]
+        return " ".join(kept) or query.strip()
+
+    async def _name_search(self, name_hint: str) -> list:
+        """Ranked name search; falls back to dropping leading/trailing words so one
+        stray word in the question doesn't make a real person "not found"."""
+        rank = getattr(self.strategies, "rank_employee_by_name", None)
+        words = name_hint.split()
+        candidates = [name_hint]
+        if len(words) > 2:
+            candidates += [" ".join(words[:2]), " ".join(words[-2:])]
+        for cand in candidates:
+            if rank:
+                found = await rank(cand, limit=5)
+            else:
+                found = await self.strategies.lookup_employee_by_name(cand, limit=5)
+            if found:
+                return found
+        return []
+
+    @staticmethod
+    def _entity_from_matches(query_value: str, results: list) -> ResolvedEntity:
+        """FOUND when one candidate clearly wins, else AMBIGUOUS."""
+        matches = [{"email": r["email"], "name": r.get("name")} for r in results]
+        winner = len(results) == 1
+        if not winner and "tier" in results[0]:
+            first, second = results[0], results[1]
+            if first["tier"] < second["tier"]:
+                winner = True          # exact/prefix match beats a mere substring match
+            elif first["tier"] == second["tier"]:
+                # same quality: the address that sent clearly more mail is the person's main one
+                winner = first.get("activity", 0) >= 3 * max(second.get("activity", 0), 1)
+        return ResolvedEntity(
+            type="employee",
+            query_value=query_value,
+            status=ResolutionStatus.FOUND if winner else ResolutionStatus.AMBIGUOUS,
+            matches=matches[:1] if winner else matches,
+        )
+
     async def resolve_employee(self, query: str, extracted_params: dict = None, llm_provider: str | None = None) -> ResolvedEntity:
         """
         Attempt to resolve a user query to an Employee node.
@@ -72,41 +135,12 @@ class EntityResolver:
             # Email not found — fall through to name search using the local part
             name_hint = email.split("@")[0].replace(".", " ")
         else:
-            # Clean intent stop words to extract the name
-            name_hint = query.lower()
-            name_hint = re.sub(r"[^\w\s@.]", "", name_hint) # Remove punctuation except @ and .
-            stopwords = [
-                "what", "emails", "did", "send", "receive", "who", "is",
-                "find", "employee", "sent", "by", "received", "from",
-                "look", "up", "search", "for", "the", "about", "tell", "me",
-                "does", "communicate", "with", "frequently", "topics", "frequent",
-                "mention", "belong", "to", "organization", "info", "information",
-                "were", "was", "discussed", "has", "have", "had"
-            ]
-            for word in stopwords:
-                name_hint = re.sub(rf"\b{word}\b", "", name_hint)
-            name_hint = re.sub(r"\s+", " ", name_hint).strip()
-            # If nothing left (e.g. "find employee"), fallback to original
-            if not name_hint:
-                name_hint = query.strip()
+            name_hint = self.clean_name_hint(query)
 
-        # Try name-based search
-        results = await self.strategies.lookup_employee_by_name(name_hint, limit=5)
-
-        if len(results) == 1:
-            return ResolvedEntity(
-                type="employee",
-                query_value=name_hint,
-                status=ResolutionStatus.FOUND,
-                matches=results,
-            )
-        elif len(results) > 1:
-            return ResolvedEntity(
-                type="employee",
-                query_value=name_hint,
-                status=ResolutionStatus.AMBIGUOUS,
-                matches=results,
-            )
+        # Try name-based search (ranked, so the result does not depend on row order)
+        results = await self._name_search(name_hint)
+        if results:
+            return self._entity_from_matches(name_hint, results)
 
         # Typo-tolerant search before letting the LLM guess spellings.
         fuzzy = await self.strategies.fuzzy_lookup_employee(name_hint, limit=5)
@@ -140,23 +174,10 @@ class EntityResolver:
             for term in search_terms:
                 if not term or len(term.strip()) < 2:
                     continue
-                term_results = await self.strategies.lookup_employee_by_name(term, limit=5)
-                if len(term_results) == 1:
-                    logger.info(f"LLM fallback successfully resolved entity: {term}")
-                    return ResolvedEntity(
-                        type="employee",
-                        query_value=term,
-                        status=ResolutionStatus.FOUND,
-                        matches=term_results,
-                    )
-                elif len(term_results) > 1:
-                    logger.info(f"LLM fallback resulted in ambiguous entity: {term}")
-                    return ResolvedEntity(
-                        type="employee",
-                        query_value=term,
-                        status=ResolutionStatus.AMBIGUOUS,
-                        matches=term_results,
-                    )
+                term_results = await self._name_search(term)
+                if term_results:
+                    logger.info(f"LLM fallback resolved entity: {term}")
+                    return self._entity_from_matches(term, term_results)
         
         logger.warning(f"Entity resolution completely failed for: {query!r}")
         return ResolvedEntity(

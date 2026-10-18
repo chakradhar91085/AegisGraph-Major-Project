@@ -491,14 +491,16 @@ class RetrievalService:
     ) -> RetrievalResponse:
         """Handle semantic_search intent by embedding the query and doing vector search."""
         try:
-            from app.llm.ollama_provider import OllamaProvider
-            provider = OllamaProvider()
-            
-            # Embed the user query via Ollama
-            embedding = await provider.embed_query(request.query)
-            
+            if settings.LLM_PROVIDER.lower() == "ollama":
+                from app.llm.ollama_provider import OllamaProvider
+                embedding = await OllamaProvider().embed_query(request.query)
+            else:
+                # No Ollama: use the local sentence-transformers model (same all-MiniLM family).
+                from app.security.embeddings import EmbeddingProvider
+                embedding = await EmbeddingProvider().get_embedding(request.query)
+
             if not embedding:
-                raise ValueError("Received empty embedding from Ollama.")
+                raise ValueError("Received empty embedding.")
             
             # Use bounded limit for semantic search based on effective context limit
             safe_limit = request.limit
