@@ -43,7 +43,7 @@ function AgentMeta({ msg }: { msg: Message }) {
           <Database className="h-3 w-3" /> {t.result_count} records · {t.retrieval_strategy}
         </span>
         {msg.llm_model && (
-          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Local model via ${msg.llm_provider ?? 'ollama'}`}>
+          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Answered by ${msg.llm_provider === 'openrouter' ? 'OpenRouter (hosted)' : 'Ollama (local)'}`}>
             {msg.llm_model}
           </span>
         )}

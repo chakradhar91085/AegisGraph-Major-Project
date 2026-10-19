@@ -79,6 +79,42 @@ class RetrievalStrategies:
             query, {"name": name.strip(), "limit": self._cap_limit(limit)}
         )
 
+    async def rank_employee_by_name(self, name: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Like lookup_employee_by_name, but best match first (deterministic).
+
+        tier 0 = the name equals the email's local part / stored name, tier 1 = it
+        starts it, tier 2 = it appears inside it. Ties are broken by how many emails
+        the address sent, so the main mailbox beats a stray alias. Without the ORDER BY,
+        LIMIT kept an arbitrary few matches and the answer changed from run to run.
+        """
+        clean = name.strip().lower()
+        if not clean:
+            return []
+        query = """
+        MATCH (p:Person)
+        WHERE toLower(p.email) CONTAINS $dotted
+           OR toLower(p.email) CONTAINS $joined
+           OR (p.name <> '' AND toLower(p.name) CONTAINS $name)
+        WITH p, split(toLower(p.email), '@')[0] AS local_part, toLower(coalesce(p.name, '')) AS lname
+        WITH p,
+             CASE WHEN local_part IN [$dotted, $joined] OR lname = $name THEN 0
+                  WHEN local_part STARTS WITH $dotted OR local_part STARTS WITH $joined
+                       OR lname STARTS WITH $name THEN 1
+                  ELSE 2 END AS tier
+        ORDER BY tier, p.email
+        LIMIT 25
+        RETURN p.email AS email, p.name AS name, tier,
+               COUNT { (p)-[:SENT]->() } AS activity
+        ORDER BY tier, activity DESC, email
+        LIMIT $limit
+        """
+        return await self.db.execute_read(query, {
+            "name": clean,
+            "dotted": clean.replace(" ", "."),
+            "joined": clean.replace(" ", ""),
+            "limit": self._cap_limit(limit),
+        })
+
     async def ensure_person_fuzzy_index(self) -> None:
         """Create the full-text index fuzzy_lookup_employee relies on (idempotent).
         The 'simple' analyzer splits emails on punctuation, so each name part is its own word."""
@@ -112,7 +148,7 @@ class RetrievalStrategies:
         """Retrieve emails sent by a specific person."""
         query = """
         MATCH (p:Person {email: $person_email})-[:SENT]->(e:Email)
-        RETURN e.emailId AS email_id, e.subject AS subject,
+        RETURN e.email_id AS email_id, e.subject AS subject,
                e.sent_at AS timestamp, e.body AS body
         ORDER BY e.sent_at DESC
         LIMIT $limit
@@ -131,7 +167,7 @@ class RetrievalStrategies:
         """Retrieve emails received by a specific person (via SENT_TO relationship)."""
         query = """
         MATCH (e:Email)-[:SENT_TO]->(p:Person {email: $person_email})
-        RETURN e.emailId AS email_id, e.subject AS subject,
+        RETURN e.email_id AS email_id, e.subject AS subject,
                e.sent_at AS timestamp, e.body AS body
         ORDER BY e.sent_at DESC
         LIMIT $limit

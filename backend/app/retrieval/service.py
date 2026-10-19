@@ -181,7 +181,7 @@ class RetrievalService:
             return await self._handle_person_connection(request, intent, extracted_params, llm_provider)
 
         elif intent == RetrievalIntent.SEMANTIC_SEARCH:
-            return await self._handle_semantic_search(request, intent)
+            return await self._handle_semantic_search(request, intent, llm_provider)
 
         # Should not reach here
         return RetrievalResponse(
@@ -487,18 +487,21 @@ class RetrievalService:
         )
 
     async def _handle_semantic_search(
-        self, request: RetrievalRequest, intent: RetrievalIntent
+        self, request: RetrievalRequest, intent: RetrievalIntent, llm_provider: str | None = None
     ) -> RetrievalResponse:
         """Handle semantic_search intent by embedding the query and doing vector search."""
         try:
-            from app.llm.ollama_provider import OllamaProvider
-            provider = OllamaProvider()
-            
-            # Embed the user query via Ollama
-            embedding = await provider.embed_query(request.query)
-            
+            from app.llm.provider_factory import resolve_provider_name
+            if resolve_provider_name(llm_provider) == "ollama":
+                from app.llm.ollama_provider import OllamaProvider
+                embedding = await OllamaProvider().embed_query(request.query)
+            else:
+                # No Ollama: use the local sentence-transformers model (same all-MiniLM family).
+                from app.security.embeddings import EmbeddingProvider
+                embedding = await EmbeddingProvider().get_embedding(request.query)
+
             if not embedding:
-                raise ValueError("Received empty embedding from Ollama.")
+                raise ValueError("Received empty embedding.")
             
             # Use bounded limit for semantic search based on effective context limit
             safe_limit = request.limit

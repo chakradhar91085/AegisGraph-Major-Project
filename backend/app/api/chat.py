@@ -3,11 +3,14 @@ import uuid
 from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Literal, Optional
 import logging
 
 from app.core.config import settings
 from app.db.postgres import AsyncSessionLocal
+from app.llm.provider_factory import (
+    SUPPORTED_PROVIDERS, get_llm_provider, provider_available, resolve_provider_name,
+)
 from app.rag.service import graph_rag_service
 from app.security.auth import User, current_user, require_admin
 from app.security.db_models import AuditSession
@@ -30,6 +33,8 @@ _user_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     session_token: Optional[str] = None
+    # Which model answers this question. Omitted = the server default (ollama).
+    llm_provider: Optional[Literal["ollama", "openrouter"]] = None
 
 class ChatResponse(BaseModel):
     answer: str
@@ -42,6 +47,18 @@ class ChatResponse(BaseModel):
     graph_data: Optional[Dict[str, Any]] = None
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
+
+@router.get("/llm/providers")
+async def llm_providers(user: User = Depends(current_user)):
+    """The models a user can switch between, and which one is the default."""
+    models = {"ollama": settings.OLLAMA_MODEL, "openrouter": settings.OPENROUTER_MODEL}
+    return {
+        "default": resolve_provider_name(None),
+        "providers": [
+            {"id": name, "model": models[name], "available": provider_available(name)}
+            for name in SUPPORTED_PROVIDERS
+        ],
+    }
 
 @router.get("/me")
 async def me(user: User = Depends(current_user)):
@@ -77,11 +94,16 @@ async def _answer(request: ChatRequest, user: User) -> ChatResponse:
 
     logger.info(f"Chat request: user={user.user_id} session={session_id} role={user.role}")
 
+    provider_name = resolve_provider_name(request.llm_provider)
+    if not provider_available(provider_name):
+        raise HTTPException(status_code=400, detail=f"{provider_name} is not configured on the server.")
+
     try:
         rag_result = await graph_rag_service.generate_answer(
             request.query,
             session_id=session_id,
             role=user.role,
+            llm_provider=provider_name,
             user_id=user.user_id,
             user_email=user.email,
         )
@@ -97,7 +119,7 @@ async def _answer(request: ChatRequest, user: User) -> ChatResponse:
             telemetry=rag_result.get("telemetry", None),
             graph_data=rag_result.get("graph_data", None),
             llm_provider=rag_result.get("llm_provider", None),
-            llm_model=settings.OLLAMA_MODEL,
+            llm_model=getattr(get_llm_provider(provider_name), "model", None),
             status="success"
         )
     except Exception as e:
