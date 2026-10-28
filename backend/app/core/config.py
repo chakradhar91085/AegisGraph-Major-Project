@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # Comma-separated "clerk_user_id:Role" pairs (Role = Auditor | Analyst | Standard).
     # Any signed-in user not listed here is "Standard". Auditor is also the admin role.
     SECURITY_USER_ROLES: str = ""
+    # Comma-separated "clerk_user_id:Display Name" pairs, shown in the admin pages
+    # instead of the raw id (e.g. user_3Jz...:Admin).
+    SECURITY_USER_NAMES: str = ""
     # Demo convenience: lets a signed-in user reset their own remembered risk
     # (the "New Session" button). Keep False outside local demos.
     DEMO_ALLOW_RISK_RESET: bool = False

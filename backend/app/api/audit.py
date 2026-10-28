@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import logging
 from sqlalchemy.future import select
 from app.db.postgres import AsyncSessionLocal
-from app.security.auth import User, current_user, require_admin
+from app.security.auth import User, current_user, display_name, require_admin
 from app.security.alerts import configured_channels, send_alert
 from app.security.db_models import AuditSession, AuditQuery
 
@@ -28,6 +28,7 @@ def _serialize_query(q: AuditQuery) -> dict:
         "role": q.role,
         "user_id": q.user_id,
         "user_email": q.user_email,
+        "user_name": display_name(q.user_id),
         "llm_provider": q.llm_provider,
         "signals": q.signals,
         "policy": q.policy,
@@ -54,6 +55,7 @@ async def get_audit_sessions(limit: int = Query(50, ge=1, le=500)):
                         "role": s.role,
                         "user_id": s.user_id,
                         "user_email": s.user_email,
+                        "user_name": display_name(s.user_id),
                         "started_at": s.started_at.isoformat() + "Z" if s.started_at else None,
                         "ended_at": s.ended_at.isoformat() + "Z" if s.ended_at else None,
                         "status": s.status,

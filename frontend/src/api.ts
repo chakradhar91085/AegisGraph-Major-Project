@@ -167,6 +167,7 @@ export interface AuditSession {
   role: string;
   user_id: string | null;
   user_email: string | null;
+  user_name?: string | null;
   started_at: string;
   ended_at: string | null;
   status: string;
@@ -194,6 +195,7 @@ export interface AuditQuery {
   role: string;
   user_id: string | null;
   user_email: string | null;
+  user_name?: string | null;
   llm_provider: string;
   signals: SignalValues | null;
   policy: AdaptivePolicy | null;
@@ -250,5 +252,9 @@ export function auditToTelemetry(q: AuditQuery): TelemetryEvent {
 }
 
 // Who asked: the email when Clerk provides it, otherwise the Clerk user id.
-export const whoOf = (row: { user_email: string | null; user_id: string | null }) =>
-  row.user_email || row.user_id || 'unknown user';
+// Who a row belongs to, most readable first: the admin-set name (SECURITY_USER_NAMES),
+// the sign-in email, then "Role · short id" (Clerk ids like user_3JzCIk... mean nothing
+// on screen). Rows from before sign-in was enforced have no user at all.
+export const whoOf = (row: { user_name?: string | null; user_email: string | null; user_id: string | null; role?: string }) =>
+  row.user_name || row.user_email
+  || (row.user_id ? `${row.role ?? 'User'} · ${row.user_id.replace(/^user_/, '').slice(0, 4)}` : 'Before sign-in (unrecorded)');

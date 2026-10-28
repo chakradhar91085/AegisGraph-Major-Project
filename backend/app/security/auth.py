@@ -45,6 +45,15 @@ def _role_for(user_id: str) -> str:
     return "Standard"
 
 
+def display_name(user_id: str | None) -> str | None:
+    """Friendly label for a Clerk user id from SECURITY_USER_NAMES ("id:Name,..."), or None."""
+    for pair in settings.SECURITY_USER_NAMES.split(","):
+        uid, _, name = pair.partition(":")
+        if user_id and uid.strip() == user_id and name.strip():
+            return name.strip()
+    return None
+
+
 async def current_user(request: Request) -> User:
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer" or not token:
