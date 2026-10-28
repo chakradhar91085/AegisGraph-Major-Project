@@ -497,8 +497,8 @@ class RetrievalService:
                 embedding = await OllamaProvider().embed_query(request.query)
             else:
                 # No Ollama: use the local sentence-transformers model (same all-MiniLM family).
-                from app.security.embeddings import EmbeddingProvider
-                embedding = await EmbeddingProvider().get_embedding(request.query)
+                from app.security.embeddings import embedding_provider
+                embedding = await embedding_provider.get_embedding(request.query)
 
             if not embedding:
                 raise ValueError("Received empty embedding.")

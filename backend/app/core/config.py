@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "qwen/qwen3.7-flash"
 
+    # Retrieval: "agent" = an LLM writes read-only Cypher through the Neo4j MCP
+    # server (falls back to "fixed" on any failure); "fixed" = the pre-written
+    # parameterized queries only.
+    RETRIEVAL_MODE: str = "agent"
+    # The agent always runs on OpenRouter (needs OPENROUTER_API_KEY); the
+    # Llama/OpenRouter toggle only picks the model that writes the final answer.
+    AGENT_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    AGENT_MAX_STEPS: int = 4
+    # Read-only Neo4j login (role "reader") the MCP server connects with.
+    NEO4J_READER_USERNAME: str = ""
+    NEO4J_READER_PASSWORD: str = ""
+
     # Context Builder Settings
     MAX_RECORDS: int = 20
     MAX_CHUNK_CHARS: int = 1500

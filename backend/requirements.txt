@@ -14,3 +14,6 @@ cryptography==50.0.1  # PyJWT needs it to verify Clerk's RS256 tokens
 
 # Only the offline ingestion pipeline (app/ingestion) uses spaCy, not the API.
 spacy==3.8.16
+
+# Neo4j MCP server used by the retrieval agent (app/retrieval/mcp_agent.py); pulls in the mcp client SDK.
+mcp-neo4j-cypher==0.6.0

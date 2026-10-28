@@ -109,6 +109,9 @@ async def _answer(request: ChatRequest, user: User) -> ChatResponse:
         )
 
         token, session_id = issue_ticket(user.user_id, session_id=session_id)
+        # Agent Cypher is for the audit log only (it can contain unmasked addresses).
+        if rag_result.get("telemetry"):
+            rag_result["telemetry"].pop("cypher_queries", None)
 
         return ChatResponse(
             answer=rag_result["answer"],

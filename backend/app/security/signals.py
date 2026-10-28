@@ -123,7 +123,8 @@ class Signals:
             "person_connection": 4,
             "entity_relationships": 5,
             "all_employees": 2,
-            "semantic_search": 3
+            "semantic_search": 3,
+            "agent_query": 3,  # free-form agent Cypher; its rows still count via result_count
         }
         
         d_t = depth_map.get(intent, 0)

@@ -44,6 +44,9 @@ class TelemetryEvent(BaseModel):
     user_id: Optional[str] = None
     user_email: Optional[str] = None
     response_mode: ResponseMode = ResponseMode.ALLOW
+    # Cypher the MCP agent ran. Audit only: stripped from the chat response,
+    # since it can name people the user is not allowed to see unmasked.
+    cypher_queries: List[str] = Field(default_factory=list)
 
 class QueryRecord(BaseModel):
     timestamp: float

@@ -11,6 +11,8 @@ import logging
 import re
 from app.retrieval.schemas import RetrievalRequest, RetrievalResponse, RetrievalIntent, ResolutionStatus
 from app.retrieval.service import retrieval_service
+from app.retrieval import mcp_agent
+from app.core.config import settings
 from app.rag.context_builder import context_builder
 from app.llm.provider_factory import get_llm_provider
 from app.security.service import aegis_security
@@ -110,7 +112,15 @@ class GraphRAGService:
             response_mode=policy.response_mode.value
         )
         try:
-            retrieval_response = await self.retrieval.execute(request, llm_provider=llm_provider)
+            retrieval_response = None
+            if settings.RETRIEVAL_MODE == "agent":
+                try:
+                    retrieval_response = await mcp_agent.retrieve(request)
+                except Exception as e:
+                    # Rate limit, network, MCP crash: the fixed queries still answer.
+                    logger.warning(f"MCP agent unavailable, using fixed retrieval: {e!r}")
+            if retrieval_response is None:
+                retrieval_response = await self.retrieval.execute(request, llm_provider=llm_provider)
         except Exception as e:
             logger.error(f"Retrieval failed: {e}")
             return {

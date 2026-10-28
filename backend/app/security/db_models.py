@@ -58,5 +58,6 @@ class AuditQuery(Base):
     instantaneous_risk = Column(Float, nullable=True)
     signals = Column(JSON, nullable=True)
     policy = Column(JSON, nullable=True)
+    cypher_queries = Column(JSON, nullable=True)  # what the MCP agent ran, if it ran
 
     session = relationship("AuditSession", back_populates="queries")

@@ -154,7 +154,8 @@ class AegisSecurityService:
             role=ctx.get("role", "Standard"),
             user_id=ctx.get("user_id"),
             user_email=ctx.get("user_email"),
-            response_mode=ctx["policy"].response_mode
+            response_mode=ctx["policy"].response_mode,
+            cypher_queries=retrieval_response.metadata.get("cypher", []),
         )
 
     @staticmethod

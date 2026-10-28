@@ -34,6 +34,7 @@ async def init_db():
             ("audit_queries", "instantaneous_risk", "FLOAT"),
             ("audit_queries", "signals", "JSON"),
             ("audit_queries", "policy", "JSON"),
+            ("audit_queries", "cypher_queries", "JSON"),
             ("audit_queries", "user_id", "VARCHAR"),
             ("audit_queries", "user_email", "VARCHAR"),
             ("audit_sessions", "user_id", "VARCHAR"),

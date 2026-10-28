@@ -99,6 +99,7 @@ class PostgresAuditLogger:
                     instantaneous_risk=telemetry.get("instantaneous_risk", 0.0),
                     signals=telemetry.get("signals"),
                     policy=telemetry.get("policy"),
+                    cypher_queries=telemetry.get("cypher_queries") or None,
                 )
                 db.add(audit_query)
                 

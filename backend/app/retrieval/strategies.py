@@ -148,7 +148,7 @@ class RetrievalStrategies:
         """Retrieve emails sent by a specific person."""
         query = """
         MATCH (p:Person {email: $person_email})-[:SENT]->(e:Email)
-        RETURN e.email_id AS email_id, e.subject AS subject,
+        RETURN e.emailId AS email_id, e.subject AS subject,
                e.sent_at AS timestamp, e.body AS body
         ORDER BY e.sent_at DESC
         LIMIT $limit
@@ -167,7 +167,7 @@ class RetrievalStrategies:
         """Retrieve emails received by a specific person (via SENT_TO relationship)."""
         query = """
         MATCH (e:Email)-[:SENT_TO]->(p:Person {email: $person_email})
-        RETURN e.email_id AS email_id, e.subject AS subject,
+        RETURN e.emailId AS email_id, e.subject AS subject,
                e.sent_at AS timestamp, e.body AS body
         ORDER BY e.sent_at DESC
         LIMIT $limit
