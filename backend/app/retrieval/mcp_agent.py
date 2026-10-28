@@ -30,7 +30,7 @@ from app.core.config import settings
 from app.retrieval.schemas import (
     RetrievalRequest, RetrievalResponse, RetrievalIntent, ResolvedEntity, ResolutionStatus,
 )
-from app.security.masking import mask_text, names_from_text
+from app.security.masking import mask_text, names_from_text, names_from_records
 
 logger = logging.getLogger(__name__)
 
@@ -187,8 +187,11 @@ Graph schema:
 Rules:
 - Fetch only what the question needs. Return readable fields (emails, names, subjects, dates, counts). Never return `embedding`; return email text only as left(e.body, 400).
 - Every query must be read-only and returns at most {limit} rows (a LIMIT is added for you).
-- People: Person has `email` and often an empty `name`. Find someone with toLower(p.email) CONTAINS 'last' (emails look like first.last@enron.com).
-- Sent mail: (p:Person)-[:SENT]->(e:Email). Received: (e:Email)-[:SENT_TO|CC_TO|BCC_TO]->(p:Person). Email ids are in e.emailId; dates in e.sent_at.
+- People: find someone with toLower(p.name) CONTAINS 'last' OR toLower(p.email) CONTAINS 'last' (emails look like first.last@enron.com). The 150 core employees have is_core = true, and most have `title` (CEO, Vice President, Trader...), `position` and `seniority` (0-1).
+- Sent mail: (p:Person)-[:SENT]->(e:Email). Received: (e:Email)-[:SENT_TO|CC_TO]->(p:Person) (BCC_TO duplicates CC_TO; ignore it). Email ids: e.emailId; dates: e.sent_on (datetime).
+- Who talks to whom: (a:Person)-[c:COMMUNICATES_WITH]->(b:Person) with c.count, c.first, c.last. Prefer it over counting emails. Person also has sent_count, received_count, contacts.
+- Each Email has `sensitivity` (list of Legal, Financial, HR, Personal, Confidential), `pii` (list) and `sensitivity_score` (0-1). Return these whenever you return emails.
+- Themes: (e:Email)-[:ABOUT]->(t:Theme) with t.name. Folders: (e:Email)-[:IN_FOLDER]->(f:Folder) with f.name, f.mailbox. Topic nodes are noisy; prefer Theme.
 - For "what emails discuss <topic>" use search_emails_by_meaning.
 - If a query errors or returns nothing, fix it and retry. You have at most {steps} rounds.
 - If the question needs no data (greeting, small talk), call no tools.
@@ -198,23 +201,36 @@ Rules:
 _EMAIL = re.compile(r"[\w.%+-]+@[\w.-]+\.[a-z]{2,}", re.IGNORECASE)
 
 
+def _endpoints() -> list[tuple[str, str, str]]:
+    """(base_url, api_key, model) in the order to try: the configured agent provider
+    (NVIDIA build by default), then OpenRouter's free model."""
+    out = []
+    if settings.AGENT_API_KEY:
+        out.append((settings.AGENT_BASE_URL, settings.AGENT_API_KEY, settings.AGENT_MODEL))
+    if settings.OPENROUTER_API_KEY:
+        out.append((settings.OPENROUTER_BASE_URL, settings.OPENROUTER_API_KEY, settings.AGENT_FALLBACK_MODEL))
+    return out
+
+
 async def _chat(messages: list[dict]) -> dict:
-    payload = {
-        "model": settings.AGENT_MODEL,
-        "messages": messages,
-        "tools": TOOLS,
-        "tool_choice": "auto",
-        "temperature": 0,
-        "reasoning": {"enabled": False},  # thinking tokens cost free-tier budget and add nothing here
-    }
-    async with httpx.AsyncClient(timeout=90) as client:
-        r = await client.post(
-            f"{settings.OPENROUTER_BASE_URL.rstrip('/')}/chat/completions",
-            json=payload,
-            headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
-        )
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]
+    last_error: Exception | None = None
+    for base_url, key, model in _endpoints():
+        payload = {
+            "model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "temperature": 0,
+            # Thinking tokens add latency and cost nothing useful here; each provider names the switch differently.
+            **({"chat_template_kwargs": {"enable_thinking": False}} if "nvidia.com" in base_url
+               else {"reasoning": {"enabled": False}}),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=90) as client:
+                r = await client.post(f"{base_url.rstrip('/')}/chat/completions", json=payload,
+                                      headers={"Authorization": f"Bearer {key}"})
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]
+        except Exception as e:  # rate limit, outage, bad key: try the next provider
+            logger.warning(f"Agent LLM {base_url} ({model}) failed: {e!r}")
+            last_error = e
+    raise last_error or RuntimeError("No agent LLM key configured (AGENT_API_KEY / OPENROUTER_API_KEY)")
 
 
 async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str:
@@ -255,8 +271,8 @@ async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str
 async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
     """Let the agent fetch evidence. Raises on infrastructure failure so the
     caller can fall back to the fixed pipeline."""
-    if not settings.OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
+    if not _endpoints():
+        raise RuntimeError("No agent LLM key configured (AGENT_API_KEY / OPENROUTER_API_KEY)")
 
     limit = request.limit  # the user's risk policy decides how many rows the agent may see
     mask = request.response_mode == "MASK"
@@ -274,7 +290,8 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
         for call in calls:
             output = await _run_tool(call, limit, batches, cyphers)
             if mask:  # MASK mode: the hosted model never sees real names or addresses either
-                output = mask_text(output, names_from_text(output))
+                seen = names_from_records(row for batch in batches for row in batch)
+                output = mask_text(output, names_from_text(output) | seen)
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": output[:6000]})
 
     logger.info(f"MCP agent ran {len(cyphers)} quer{'y' if len(cyphers) == 1 else 'ies'}: {cyphers}")

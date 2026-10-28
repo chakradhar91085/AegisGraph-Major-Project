@@ -18,7 +18,7 @@ from app.llm.provider_factory import get_llm_provider
 from app.security.service import aegis_security
 from app.security.audit import audit_logger
 from app.security.models import ResponseMode
-from app.security.masking import mask_text, mask_graph, names_from_text
+from app.security.masking import mask_text, mask_graph, names_from_text, names_from_records
 from app.security.session import session_store
 from app.retrieval.graph_extractor import graph_extractor
 
@@ -188,7 +188,8 @@ class GraphRAGService:
         mask = telemetry_event.response_mode == ResponseMode.MASK
         names = set()
         if mask:
-            names = names_from_text(context_str, query) | _entity_names(retrieval_response)
+            names = (names_from_text(context_str, query) | _entity_names(retrieval_response)
+                     | names_from_records(retrieval_response.results))
             context_str = mask_text(context_str, names)
 
         def build_graph_data() -> dict:

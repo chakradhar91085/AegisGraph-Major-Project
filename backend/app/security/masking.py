@@ -23,13 +23,24 @@ def names_from_text(*texts: str) -> set[str]:
     return names
 
 
+def names_from_records(rows) -> set[str]:
+    """Person names stored in result rows, e.g. {'sender_name': 'Kenneth L. Lay'}."""
+    names = set()
+    for row in rows:
+        for key, value in row.items():
+            if "name" in key.lower() and isinstance(value, str) and "@" not in value and len(value.split()) >= 2:
+                names.add(value)
+    return names
+
+
 def mask_text(text: str, names=()) -> str:
     text = _EMAIL.sub("[REDACTED_EMAIL]", text)
     text = _SSN.sub("[REDACTED_SSN]", text)
     text = _PHONE.sub("[REDACTED_PHONE]", text)
     for name in names:
-        first, last = name.split()[0], name.split()[-1]
-        pattern = rf"\b{re.escape(first)}[\s,]+{re.escape(last)}\b|\b{re.escape(last)}[\s,]+{re.escape(first)}\b"
+        first, last = re.escape(name.split()[0]), re.escape(name.split()[-1])
+        middle = r"(?:[\s,]+[A-Za-z]\.?)?"  # "Kenneth L. Lay", "Lay, Kenneth L."
+        pattern = rf"\b{first}{middle}[\s,]+{last}\b|\b{last}[\s,]+{first}{middle}(?!\w)"
         text = re.sub(pattern, "[REDACTED_NAME]", text, flags=re.IGNORECASE)
     return text
 
