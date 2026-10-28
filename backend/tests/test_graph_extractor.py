@@ -116,3 +116,22 @@ def test_blocked_or_empty_retrieval():
     payload = graph_extractor.extract(response)
     assert len(payload.nodes) == 0
     assert len(payload.edges) == 0
+
+
+def test_mcp_agent_rows_become_a_graph():
+    from app.retrieval.graph_extractor import graph_extractor
+    from app.retrieval.schemas import RetrievalResponse
+    ranked = RetrievalResponse(query="q", intent="agent_query", strategy="mcp_agent", result_count=2, results=[
+        {"executive": "Richard Shapiro", "title": "Vice President", "legal_email_count": 12},
+        {"executive": "Steven J Kean", "title": "Vice President", "legal_email_count": 5},
+    ])
+    g = graph_extractor.extract(ranked)
+    assert {n.label for n in g.nodes} == {"Results", "Richard Shapiro", "Steven J Kean"}
+    assert all(e.source == "__results__" for e in g.edges) and g.edges[0].weight == 12.0
+
+    emails = RetrievalResponse(query="q", intent="agent_query", strategy="mcp_agent", result_count=1, results=[
+        {"sender": "kenneth.lay@enron.com", "sender_name": "Kenneth Lay", "emailId": "enron_1", "subject": "Board"},
+    ])
+    g = graph_extractor.extract(emails)
+    assert {(n.type, n.label) for n in g.nodes} == {("Person", "Kenneth Lay"), ("Email", "Board")}
+    assert [(e.source, e.target) for e in g.edges] == [("kenneth.lay@enron.com", "enron_1")]

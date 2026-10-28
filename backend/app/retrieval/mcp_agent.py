@@ -190,7 +190,7 @@ Rules:
 - People: find someone with toLower(p.name) CONTAINS 'last' OR toLower(p.email) CONTAINS 'last' (emails look like first.last@enron.com). The 150 core employees have is_core = true, and most have `title` (CEO, Vice President, Trader...), `position` and `seniority` (0-1).
 - Sent mail: (p:Person)-[:SENT]->(e:Email). Received: (e:Email)-[:SENT_TO|CC_TO]->(p:Person) (BCC_TO duplicates CC_TO; ignore it). Email ids: e.emailId; dates: e.sent_on (datetime).
 - Who talks to whom: (a:Person)-[c:COMMUNICATES_WITH]->(b:Person) with c.count, c.first, c.last. Prefer it over counting emails. Person also has sent_count, received_count, contacts.
-- Each Email has `sensitivity` (list of Legal, Financial, HR, Personal, Confidential), `pii` (list) and `sensitivity_score` (0-1). Return these whenever you return emails.
+- Each Email has `sensitivity` (list of Legal, Financial, HR, Personal, Confidential), `pii` (list) and `sensitivity_score` (0-1). Whenever you return emails, return e.emailId AS emailId and these fields too.
 - Themes: (e:Email)-[:ABOUT]->(t:Theme) with t.name. Folders: (e:Email)-[:IN_FOLDER]->(f:Folder) with f.name, f.mailbox. Topic nodes are noisy; prefer Theme.
 - For "what emails discuss <topic>" use search_emails_by_meaning.
 - If a query errors or returns nothing, fix it and retry. You have at most {steps} rounds.
@@ -226,7 +226,7 @@ async def _chat(messages: list[dict]) -> dict:
                 r = await client.post(f"{base_url.rstrip('/')}/chat/completions", json=payload,
                                       headers={"Authorization": f"Bearer {key}"})
                 r.raise_for_status()
-                return r.json()["choices"][0]["message"]
+                return {**r.json()["choices"][0]["message"], "_model": model}
         except Exception as e:  # rate limit, outage, bad key: try the next provider
             logger.warning(f"Agent LLM {base_url} ({model}) failed: {e!r}")
             last_error = e
@@ -281,8 +281,10 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
     batches: list[list[dict]] = []
     cyphers: list[str] = []
 
+    model = None
     for _ in range(settings.AGENT_MAX_STEPS):
         msg = await _chat(messages)
+        model = msg.pop("_model", model)
         calls = msg.get("tool_calls") or []
         if not calls:
             break
@@ -318,5 +320,5 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
         results=results,
         result_count=len(results),
         strategy="mcp_agent",
-        metadata={"cypher": cyphers},
+        metadata={"cypher": cyphers, "agent_model": model},
     )

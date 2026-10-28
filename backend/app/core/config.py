@@ -89,11 +89,18 @@ class Settings(BaseSettings):
     SECURITY_GRAPH_MAX_NODES: int = 50
     SECURITY_GRAPH_WEIGHT: float = 0.5
     
-    # Risk Fusion Weights (alpha, beta, gamma, delta)
-    SECURITY_WEIGHT_SEMANTIC: float = 0.25
-    SECURITY_WEIGHT_TEMPORAL: float = 0.25
-    SECURITY_WEIGHT_ENTITY: float = 0.25
-    SECURITY_WEIGHT_GRAPH: float = 0.25
+    # Risk Fusion Weights (alpha, beta, gamma, delta, epsilon)
+    SECURITY_WEIGHT_SEMANTIC: float = 0.2
+    SECURITY_WEIGHT_TEMPORAL: float = 0.2
+    SECURITY_WEIGHT_ENTITY: float = 0.2
+    SECURITY_WEIGHT_GRAPH: float = 0.2
+    SECURITY_WEIGHT_SENSITIVITY: float = 0.2
+
+    # Sensitivity exposure (5th signal): sensitive data a user has pulled, fading with
+    # this half-life; the signal reaches ~63% once SCALE units have been pulled
+    # (one unit = one fully sensitive email about a top executive).
+    SECURITY_SENSITIVITY_HALF_LIFE_SECONDS: float = 900.0
+    SECURITY_SENSITIVITY_SCALE: float = 3.0
     
     SECURITY_EWMA_LAMBDA: float = 0.4
     

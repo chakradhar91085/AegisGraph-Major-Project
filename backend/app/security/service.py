@@ -9,11 +9,15 @@ from app.security.risk import risk_engine
 from app.security.policy import policy_engine
 from app.security.gates import gate_score
 from app.security.alerts import notify
+from app.security import exposure
 from app.security.audit import SEVERITY_ORDER
 from app.retrieval.schemas import RetrievalResponse
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Sensitive emails in a single answer that trigger an admin alert.
+SENSITIVE_PULL_ALERT = 5
 
 class AegisSecurityService:
     async def observe_query(self, session_id: str, query: str, role: str = "Standard", user_id: str | None = None, user_email: str | None = None) -> Dict[str, Any]:
@@ -109,11 +113,18 @@ class AegisSecurityService:
             result_count=retrieval_response.result_count
         )
         
+        # Sensitivity exposure: what this answer touched, added to a fading per-user total.
+        answer_exposure = await exposure.measure(retrieval_response.results)
+        state.exposure = exposure.accumulate(state.exposure, state.exposure_at, current_time,
+                                             answer_exposure.get("units", 0.0))
+        state.exposure_at = current_time
+
         signals = SignalValues(
             semantic_focus=ctx["semantic_focus"],
             temporal_frequency=temporal_frequency,
             entity_focus=entity_focus,
-            graph_footprint=graph_footprint
+            graph_footprint=graph_footprint,
+            sensitivity_exposure=exposure.signal(state.exposure),
         )
         
         # Fuse Risk
@@ -135,7 +146,7 @@ class AegisSecurityService:
         session_store.update_smoothed_risk(risk_key, smoothed_risk)
         retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "restricted_by_policy", "none", "error")
 
-        self._alert_admin(ctx, state, smoothed_risk)
+        self._alert_admin(ctx, state, smoothed_risk, answer_exposure)
 
         # Return Telemetry
         return TelemetryEvent(
@@ -156,11 +167,15 @@ class AegisSecurityService:
             user_email=ctx.get("user_email"),
             response_mode=ctx["policy"].response_mode,
             cypher_queries=retrieval_response.metadata.get("cypher", []),
+            exposure=answer_exposure,
+            retrieval_model=retrieval_response.metadata.get("agent_model")
+            or ("fixed queries" if retrieval_executed else None),
         )
 
     @staticmethod
-    def _alert_admin(ctx: Dict[str, Any], state, smoothed_risk: float) -> None:
-        """Alert on a security-gate hit, or when a user's mode escalates (ALLOW -> MASK -> BLOCK)."""
+    def _alert_admin(ctx: Dict[str, Any], state, smoothed_risk: float, answer_exposure: Dict[str, Any] | None = None) -> None:
+        """Alert on a security-gate hit, a large pull of sensitive data, or when a
+        user's mode escalates (ALLOW -> MASK -> BLOCK)."""
         mode = ctx["policy"].response_mode.value
         escalated = SEVERITY_ORDER[mode] > SEVERITY_ORDER.get(state.last_mode, 0)
         state.last_mode = mode
@@ -174,6 +189,10 @@ class AegisSecurityService:
             events.append("Risk reached HIGH: this user's queries are now BLOCKED")
         elif escalated and mode == "MASK":
             events.append("Risk reached MEDIUM: names and emails are now MASKED for this user")
+        if answer_exposure and answer_exposure.get("sensitive_items", 0) >= SENSITIVE_PULL_ALERT:
+            labels = ", ".join(f"{n} {k}" for k, n in sorted(answer_exposure["labels"].items(), key=lambda kv: -kv[1]))
+            events.append(f"Pulled {answer_exposure['sensitive_items']} sensitive emails in one answer ({labels}); "
+                          f"most senior person involved: seniority {answer_exposure['max_seniority']}")
         if not events:
             return
 

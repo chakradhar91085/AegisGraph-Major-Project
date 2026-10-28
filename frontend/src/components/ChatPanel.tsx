@@ -3,7 +3,7 @@ import { useChat, type Message } from '../contexts/ChatContext';
 import { Send, Loader2, ShieldBan, Database, Network, ArrowRight, MessagesSquare } from 'lucide-react';
 import clsx from 'clsx';
 import { FormattedText } from './FormattedText';
-import { ModeBadge, explainSignals } from './ModeBadge';
+import { ModeBadge, SensitivityBadges, explainSignals } from './ModeBadge';
 
 const INPUT_MAX_HEIGHT = 150;
 
@@ -40,13 +40,22 @@ function AgentMeta({ msg }: { msg: Message }) {
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
         <ModeBadge mode={t.response_mode} />
         <span className="inline-flex items-center gap-1 rounded border border-slate-800 px-2 py-0.5 font-mono" title="Records retrieved from the knowledge graph">
-          <Database className="h-3 w-3" /> {t.result_count} records · {t.retrieval_strategy}
+          <Database className="h-3 w-3" /> {t.result_count} records
         </span>
-        {msg.llm_model && (
-          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Answered by ${msg.llm_provider === 'openrouter' ? 'OpenRouter (hosted)' : 'Ollama (local)'}`}>
-            {msg.llm_model}
+        {t.retrieval_model && (
+          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono"
+            title={t.retrieval_model === 'fixed queries'
+              ? 'Fetched with the pre-written graph queries'
+              : 'Fetched by the AI agent writing read-only Cypher through the Neo4j MCP server'}>
+            Data: {t.retrieval_model.split('/').pop()}
           </span>
         )}
+        {msg.llm_model && (
+          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Answer written by ${msg.llm_provider === 'openrouter' ? 'OpenRouter (hosted)' : 'Ollama (local)'}`}>
+            Answer: {msg.llm_model.split('/').pop()}
+          </span>
+        )}
+        <SensitivityBadges exposure={t.exposure} />
         {msg.graph_data && (
           <button
             onClick={() => setActiveGraphData(msg.graph_data!)}

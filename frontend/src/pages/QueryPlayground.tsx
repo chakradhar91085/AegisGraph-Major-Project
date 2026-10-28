@@ -59,7 +59,9 @@ export function QueryPlayground() {
                 <ModeBadge mode={identity.response_mode} />
               </div>
             )}
-            <div className="flex items-center rounded-md border border-slate-700 p-0.5" role="group" aria-label="Language model">
+            <div className="flex items-center rounded-md border border-slate-700 p-0.5" role="group" aria-label="Model that writes the answer"
+              title="Writes the answer. The data itself is fetched by the NVIDIA agent (or the fixed queries if it is unavailable).">
+              <span className="px-1.5 text-xs text-slate-500">Answer</span>
               {llmChoices.map(({ id, label }) => {
                 const info = llmInfo.find((i) => i.id === id);
                 const disabled = info ? !info.available : false;

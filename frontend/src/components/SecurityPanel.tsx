@@ -172,6 +172,7 @@ export function SecurityPanel({ telemetry, history }: SecurityPanelProps) {
               { label: "Temporal Frequency", symbol: "S_temp", value: signals.temporal_frequency, color: "bg-blue-500" },
               { label: "Entity Focus", symbol: "S_ent", value: signals.entity_focus, color: "bg-blue-500" },
               { label: "Graph Footprint", symbol: "S_graph", value: signals.graph_footprint, color: "bg-blue-500" },
+              { label: "Sensitivity Exposure", symbol: "S_sens", value: signals.sensitivity_exposure ?? 0, color: "bg-blue-500" },
             ].map((sig) => (
               <div key={sig.symbol}>
                 <div className="flex justify-between items-end mb-2">

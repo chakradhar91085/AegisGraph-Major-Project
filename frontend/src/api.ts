@@ -34,6 +34,17 @@ export interface SignalValues {
   temporal_frequency: number;
   entity_focus: number;
   graph_footprint: number;
+  sensitivity_exposure?: number; // 5th signal; absent on audit rows older than it
+}
+
+// What one answer touched (counts only, no names).
+export interface Exposure {
+  units?: number;
+  sensitive_items?: number;
+  items?: number;
+  max_seniority?: number;
+  labels?: Record<string, number>;
+  pii?: Record<string, number>;
 }
 
 export interface TelemetryEvent {
@@ -50,6 +61,8 @@ export interface TelemetryEvent {
   blocked_by_policy: boolean;
   role: string;
   response_mode: 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
+  exposure?: Exposure;
+  retrieval_model?: string | null; // MCP agent model, "fixed queries", or null
 }
 
 export type LlmProvider = 'ollama' | 'openrouter';
@@ -184,6 +197,8 @@ export interface AuditQuery {
   llm_provider: string;
   signals: SignalValues | null;
   policy: AdaptivePolicy | null;
+  cypher_queries: string[] | null;
+  exposure: Exposure | null;
 }
 
 export const auditApi = {
@@ -223,13 +238,14 @@ export function auditToTelemetry(q: AuditQuery): TelemetryEvent {
     intent: q.intent,
     retrieval_strategy: q.retrieval_outcome,
     result_count: q.result_count,
-    signals: q.signals ?? { semantic_focus: 0, temporal_frequency: 0, entity_focus: 0, graph_footprint: 0 },
+    signals: q.signals ?? { semantic_focus: 0, temporal_frequency: 0, entity_focus: 0, graph_footprint: 0, sensitivity_exposure: 0 },
     instantaneous_risk: q.instantaneous_risk ?? q.risk_score,
     smoothed_risk: q.risk_score,
     policy: q.policy ?? undefined,
     blocked_by_policy: q.blocked,
     role: q.role,
     response_mode: q.behavioral_mode as ResponseMode,
+    exposure: q.exposure ?? undefined,
   };
 }
 

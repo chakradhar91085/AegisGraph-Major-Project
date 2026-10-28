@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { auditApi, whoOf } from '../api';
 import type { AuditSession, AuditQuery } from '../api';
 import { usePolling } from '../usePolling';
-import { ModeBadge } from '../components/ModeBadge';
+import { ModeBadge, SensitivityBadges } from '../components/ModeBadge';
 import { PageHeader, ErrorNote } from '../components/AdminUi';
 
 const SESSION_LIMIT = 200;
@@ -35,6 +35,7 @@ function SessionQueries({ sessionId }: { sessionId: string }) {
           <th className="px-2 py-2 font-medium">Policy</th>
           <th className="hidden px-2 py-2 font-medium md:table-cell">Outcome</th>
           <th className="hidden px-2 py-2 font-medium sm:table-cell">Records</th>
+          <th className="hidden px-2 py-2 font-medium lg:table-cell">Sensitive data</th>
           <th className="px-2 py-2 font-medium">Question</th>
         </tr>
       </thead>
@@ -46,7 +47,22 @@ function SessionQueries({ sessionId }: { sessionId: string }) {
             <td className="px-2 py-2"><ModeBadge mode={q.behavioral_mode} /></td>
             <td className="hidden px-2 py-2 text-xs text-slate-300 md:table-cell">{q.retrieval_outcome}</td>
             <td className="hidden px-2 py-2 text-slate-300 sm:table-cell">{q.result_count}</td>
-            <td className="px-2 py-2 text-slate-200">{q.query}</td>
+            <td className="hidden px-2 py-2 lg:table-cell">
+              <div className="flex flex-wrap gap-1"><SensitivityBadges exposure={q.exposure} /></div>
+            </td>
+            <td className="px-2 py-2 text-slate-200">
+              {q.query}
+              {q.cypher_queries?.length ? (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-300">
+                    Agent ran {q.cypher_queries.length} quer{q.cypher_queries.length === 1 ? 'y' : 'ies'}
+                  </summary>
+                  {q.cypher_queries.map((c, i) => (
+                    <pre key={i} className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-slate-950 p-2 font-mono text-xs text-slate-400">{c}</pre>
+                  ))}
+                </details>
+              ) : null}
+            </td>
           </tr>
         ))}
       </tbody>

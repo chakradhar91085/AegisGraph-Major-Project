@@ -31,6 +31,8 @@ def _serialize_query(q: AuditQuery) -> dict:
         "llm_provider": q.llm_provider,
         "signals": q.signals,
         "policy": q.policy,
+        "cypher_queries": q.cypher_queries,  # audit routes are Auditor-only
+        "exposure": q.exposure,
     }
 
 @router.get("/audit/sessions")

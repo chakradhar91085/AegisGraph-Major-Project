@@ -26,6 +26,7 @@ class SignalValues(BaseModel):
     temporal_frequency: float = Field(0.0, ge=0.0, le=1.0)
     entity_focus: float = Field(0.0, ge=0.0, le=1.0)
     graph_footprint: float = Field(0.0, ge=0.0, le=1.0)
+    sensitivity_exposure: float = Field(0.0, ge=0.0, le=1.0)
 
 class TelemetryEvent(BaseModel):
     session_id: str
@@ -47,6 +48,11 @@ class TelemetryEvent(BaseModel):
     # Cypher the MCP agent ran. Audit only: stripped from the chat response,
     # since it can name people the user is not allowed to see unmasked.
     cypher_queries: List[str] = Field(default_factory=list)
+    # What this answer touched: {"labels": {"Legal": 3}, "pii": {...}, "sensitive_items": n,
+    # "max_seniority": x, "units": x}. Counts only, no names, so it is safe to show the user.
+    exposure: Dict[str, Any] = Field(default_factory=dict)
+    # Who fetched the evidence: the MCP agent's model, "fixed queries", or None if nothing ran.
+    retrieval_model: Optional[str] = None
 
 class QueryRecord(BaseModel):
     timestamp: float
@@ -62,3 +68,6 @@ class SessionState(BaseModel):
     last_entity: Optional[str] = None
     # Mode of the previous query, so alerts fire on escalation, not every query.
     last_mode: str = "ALLOW"
+    # Accumulated sensitivity exposure and when it was last updated (it fades over time).
+    exposure: float = 0.0
+    exposure_at: float = 0.0

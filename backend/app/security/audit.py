@@ -43,7 +43,8 @@ class PostgresAuditLogger:
                 is_masked = True
                 
             timestamp = telemetry.get("timestamp", 0)
-            dt_timestamp = datetime.datetime.fromtimestamp(timestamp)
+            # Naive UTC, like every other audit timestamp (the API appends "Z").
+            dt_timestamp = datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc).replace(tzinfo=None)
 
             async with AsyncSessionLocal() as db:
                 # Get or Create Session
@@ -100,6 +101,7 @@ class PostgresAuditLogger:
                     signals=telemetry.get("signals"),
                     policy=telemetry.get("policy"),
                     cypher_queries=telemetry.get("cypher_queries") or None,
+                    exposure=telemetry.get("exposure") or None,
                 )
                 db.add(audit_query)
                 

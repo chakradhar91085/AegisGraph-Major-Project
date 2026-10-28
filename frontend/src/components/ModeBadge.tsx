@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import type { ResponseMode, SignalValues } from '../api';
+import type { Exposure, ResponseMode, SignalValues } from '../api';
 
 // One place that says how each policy mode looks, used on every page.
 const MODE_STYLES: Record<ResponseMode, { label: string; tone: string; dot: string }> = {
@@ -23,11 +23,38 @@ export function ModeBadge({ mode, className }: { mode: string; className?: strin
   );
 }
 
+const PII_WORDS: Record<string, string> = { ssn: 'SSN', card: 'Card no.', dob: 'Birth date' };
+
+// Sensitivity labels of what one answer touched, e.g. "3 Legal · 1 HR · SSN".
+// Phone numbers and street addresses are left out: they are mostly office details.
+export function SensitivityBadges({ exposure }: { exposure?: Exposure | null }) {
+  const labels = Object.entries(exposure?.labels ?? {}).sort((a, b) => b[1] - a[1]);
+  const pii = Object.keys(exposure?.pii ?? {}).filter((k) => k in PII_WORDS);
+  if (!labels.length && !pii.length) return null;
+  return (
+    <>
+      {labels.map(([label, n]) => (
+        <span key={label} className="rounded border border-amber-900 bg-amber-950/40 px-2 py-0.5 text-xs font-mono text-amber-400"
+          title={`${n} retrieved email${n === 1 ? '' : 's'} labelled ${label}`}>
+          {n} {label}
+        </span>
+      ))}
+      {pii.map((k) => (
+        <span key={k} className="rounded border border-red-900 bg-red-950/40 px-2 py-0.5 text-xs font-mono text-red-400"
+          title="Retrieved text contains this kind of personal data">
+          {PII_WORDS[k]}
+        </span>
+      ))}
+    </>
+  );
+}
+
 const SIGNAL_WORDS: Record<keyof SignalValues, string> = {
   semantic_focus: 'staying on one narrow topic',
   temporal_frequency: 'asking many questions quickly',
   entity_focus: 'repeatedly targeting the same person',
   graph_footprint: 'pulling a wide slice of the graph',
+  sensitivity_exposure: 'pulling sensitive (legal, HR, personal) data, especially about senior people',
 };
 
 // Plain-language reason for a risk score: which behaviour contributed most.

@@ -12,10 +12,18 @@ export function useIdentity(refreshKey: unknown = null): Identity | null | undef
 
   useEffect(() => {
     let cancelled = false;
-    chatApi.me()
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // One retry: a sign-in token that expired while the tab sat idle fails the
+    // first call, and Clerk has a fresh one a moment later.
+    const load = (retry: boolean) => chatApi.me()
       .then((me) => { if (!cancelled) setIdentity(me); })
-      .catch(() => { if (!cancelled) setIdentity(undefined); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (cancelled) return;
+        if (retry) timer = setTimeout(() => load(false), 1500);
+        else setIdentity(undefined);
+      });
+    load(true);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [refreshKey]);
 
   return identity;

@@ -59,5 +59,6 @@ class AuditQuery(Base):
     signals = Column(JSON, nullable=True)
     policy = Column(JSON, nullable=True)
     cypher_queries = Column(JSON, nullable=True)  # what the MCP agent ran, if it ran
+    exposure = Column(JSON, nullable=True)  # sensitivity of what the answer touched (counts only)
 
     session = relationship("AuditSession", back_populates="queries")

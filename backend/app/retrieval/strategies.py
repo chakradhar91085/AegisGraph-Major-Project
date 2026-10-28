@@ -244,7 +244,7 @@ class RetrievalStrategies:
         CALL db.index.vector.queryNodes('email_embeddings', $limit, $embedding)
         YIELD node AS e, score
         OPTIONAL MATCH (p:Person)-[:SENT]->(e)
-        RETURN e.subject AS subject, e.body AS body, e.sent_at AS timestamp,
+        RETURN e.emailId AS email_id, e.subject AS subject, e.body AS body, e.sent_at AS timestamp,
                p.email AS sender_email, p.name AS sender_name, score
         ORDER BY score DESC
         """
