@@ -51,6 +51,28 @@ class OpenRouterProvider(BaseLLMProvider):
             logger.error(f"OpenRouter generation error: {e}")
             raise
 
+    async def stream(self, prompt: str, system_prompt: str = None):
+        messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
+            {"role": "user", "content": prompt}]
+        payload = {"model": self.model, "messages": messages, "stream": True, "reasoning": {"enabled": False}}
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload,
+                                         headers=self.headers) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue  # SSE comments / keep-alives
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        choices = json.loads(data).get("choices") or []
+                        if choices and (text := (choices[0].get("delta") or {}).get("content")):
+                            yield text
+        except httpx.TimeoutException:
+            logger.error("OpenRouter stream timed out.")
+            raise TimeoutError("LLM request timed out.")
+
     async def extract_query_parameters(self, query: str, allowed_intents: list[str]) -> dict:
         system_prompt = (
             "You are an information extraction engine for the AegisGraph Graph-RAG pipeline.\n"

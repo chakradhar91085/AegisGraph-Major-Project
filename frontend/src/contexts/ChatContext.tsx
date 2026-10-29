@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
-import { chatApi } from '../api';
+import { chatApi, ChatStreamError } from '../api';
 import type { TelemetryEvent, GraphVisualizationPayload, LlmProvider } from '../api';
 
 export interface Message {
@@ -15,22 +15,29 @@ export interface Message {
 
 // Plain-language explanation of a failed chat request.
 function describeError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    if (!err.response) return "Can't reach the AegisGraph server. Check that the backend is running.";
-    const status = err.response.status;
-    if (status === 401) return 'Your sign-in has expired. Please sign in again.';
-    if (status === 403) return "Your account isn't allowed to do that.";
-    if (status === 429) return 'Please wait for your previous question to finish.';
-    if (status === 422) return 'That question could not be read. Try rephrasing it (max 2000 characters).';
-    if (status >= 500) return 'The server ran into a problem while answering. Please try again.';
-    return `The request failed (HTTP ${status}).`;
-  }
-  return 'Something went wrong while sending your question.';
+  // HTTP status of the failure; 0 = never reached the server; null = not an HTTP failure.
+  const status = axios.isAxiosError(err) ? (err.response?.status ?? 0)
+    : err instanceof ChatStreamError ? err.status : null;
+  if (status === null) return 'Something went wrong while sending your question.';
+  if (status === 0) return "Can't reach the AegisGraph server. Check that the backend is running.";
+  if (status === 401) return 'Your sign-in has expired. Please sign in again.';
+  if (status === 403) return "Your account isn't allowed to do that.";
+  if (status === 429) return 'Please wait for your previous question to finish.';
+  if (status === 422) return 'That question could not be read. Try rephrasing it (max 2000 characters).';
+  if (status >= 500) return 'The server ran into a problem while answering. Please try again.';
+  return `The request failed (HTTP ${status}).`;
+}
+
+// The answer being written right now: progress text, then the words as they arrive.
+export interface PendingAnswer {
+  status: string;
+  text: string;
 }
 
 interface ChatContextType {
   messages: Message[];
   loading: boolean;
+  pending: PendingAnswer | null;
   error: string | null;
 
   llmProvider: LlmProvider;
@@ -48,6 +55,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState<PendingAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [activeGraphData, setActiveGraphData] = useState<GraphVisualizationPayload | null>(null);
@@ -72,10 +80,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
     setError(null);
+    setPending({ status: 'Checking risk…', text: '' });
 
     try {
       const sessionToken = sessionStorage.getItem('aegis_session_token') || undefined;
-      const response = await chatApi.sendMessage(text, sessionToken, llmProvider);
+      const response = await chatApi.sendMessageStream(text, sessionToken, llmProvider, {
+        onStatus: (status) => setPending((p) => ({ text: '', ...p, status })),
+        onToken: (piece) => setPending((p) => ({ status: '', ...p, text: (p?.text ?? '') + piece })),
+      });
 
       // The server renews the ticket on every response; always store the
       // latest one so the session can continue securely.
@@ -102,6 +114,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setError(describeError(err));
     } finally {
       setLoading(false);
+      setPending(null);
     }
   }, [llmProvider]);
 
@@ -135,7 +148,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContext.Provider value={{
-      messages, loading, error, llmProvider, setLlmProvider,
+      messages, loading, pending, error, llmProvider, setLlmProvider,
       sendMessage, clearSession, resetConversation, endActiveSession,
       activeGraphData, setActiveGraphData
     }}>

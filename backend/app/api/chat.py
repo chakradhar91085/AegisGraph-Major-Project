@@ -1,7 +1,9 @@
 import asyncio
+import json
 import uuid
 from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Literal, Optional
 import logging
@@ -29,6 +31,7 @@ router = APIRouter()
 # against the same not-yet-updated risk score and slip past the policy.
 # ponytail: in-process locks; use a shared lock (e.g. Redis) if run with several workers.
 _user_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+_background_tasks: set[asyncio.Task] = set()  # keeps streaming tasks alive until they finish
 
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
@@ -89,7 +92,44 @@ async def chat_endpoint(request: ChatRequest, user: User = Depends(current_user)
         return await _answer(request, user)
 
 
-async def _answer(request: ChatRequest, user: User) -> ChatResponse:
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
+    """Same pipeline as /chat, delivered as server-sent events: `status` (progress),
+    `token` (a piece of the answer, only when it needs no masking) and finally `done`
+    with the full ChatResponse, which is the authoritative answer, or `error`."""
+    lock = _user_locks[user.user_id]
+    if lock.locked():
+        raise HTTPException(status_code=429, detail="Please wait for your previous question to finish.")
+    await lock.acquire()  # unlocked, so this does not yield: no one can slip in between
+    events: asyncio.Queue = asyncio.Queue()
+
+    async def run():
+        try:
+            events.put_nowait(("done", (await _answer(request, user, events)).model_dump(mode="json")))
+        except HTTPException as e:
+            events.put_nowait(("error", {"status": e.status_code, "detail": e.detail}))
+        except Exception:
+            logger.exception("Streaming chat failed")
+            events.put_nowait(("error", {"status": 500, "detail": "Internal server error during chat processing"}))
+        finally:
+            lock.release()
+            events.put_nowait(None)
+
+    # Runs to completion (audit log included) even if the browser disconnects.
+    task = asyncio.create_task(run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    async def sse():
+        while (item := await events.get()) is not None:
+            kind, data = item
+            yield f"event: {kind}\ndata: {json.dumps(data, default=str)}\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _answer(request: ChatRequest, user: User, events: asyncio.Queue | None = None) -> ChatResponse:
     session_id = (verify_ticket(request.session_token, user.user_id) if request.session_token else None) or str(uuid.uuid4())
 
     logger.info(f"Chat request: user={user.user_id} session={session_id} role={user.role}")
@@ -106,6 +146,7 @@ async def _answer(request: ChatRequest, user: User) -> ChatResponse:
             llm_provider=provider_name,
             user_id=user.user_id,
             user_email=user.email,
+            events=events,
         )
 
         token, session_id = issue_ticket(user.user_id, session_id=session_id)

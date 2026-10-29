@@ -130,7 +130,65 @@ export interface Identity {
 
 export const ADMIN_ROLE = 'Auditor';
 
+// Failure of the streaming endpoint. status 0 = the server could not be reached.
+export class ChatStreamError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export interface StreamHandlers {
+  onStatus?: (text: string) => void; // progress: "Searching the knowledge graph…"
+  onToken?: (text: string) => void;  // a piece of the answer (never sent while names are being masked)
+}
+
 export const chatApi = {
+  // Same pipeline as sendMessage, but the answer arrives as it is written. axios cannot
+  // read a response while it is still arriving, so this uses fetch. The final "done"
+  // event carries the complete ChatResponse and is the authoritative answer.
+  async sendMessageStream(
+    query: string,
+    sessionToken: string | undefined,
+    llmProvider: LlmProvider | undefined,
+    handlers: StreamHandlers,
+  ): Promise<ChatResponse> {
+    const token = tokenGetter ? await tokenGetter() : null;
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ query, llm_provider: llmProvider, session_token: sessionToken }),
+      });
+    } catch {
+      throw new ChatStreamError(0, 'unreachable');
+    }
+    if (!res.ok || !res.body) throw new ChatStreamError(res.status, `HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end: number;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const kind = /^event: (.*)$/m.exec(block)?.[1];
+        const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? 'null');
+        if (kind === 'status') handlers.onStatus?.(data);
+        else if (kind === 'token') handlers.onToken?.(data);
+        else if (kind === 'done') return data as ChatResponse;
+        else if (kind === 'error') throw new ChatStreamError(data.status, data.detail);
+      }
+    }
+    throw new ChatStreamError(0, 'The connection closed before the answer finished.');
+  },
+
   async sendMessage(
     query: string,
     sessionToken?: string,

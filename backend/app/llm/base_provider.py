@@ -35,6 +35,11 @@ class BaseLLMProvider(ABC):
         """
         ...
 
+    async def stream(self, prompt: str, system_prompt: str = None):
+        """Yield the response in pieces as it is generated. Providers that cannot
+        stream fall back to one piece, the whole answer."""
+        yield await self.generate(prompt, system_prompt)
+
     @abstractmethod
     async def extract_query_parameters(self, query: str, allowed_intents: list[str]) -> dict:
         """

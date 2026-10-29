@@ -59,6 +59,29 @@ class OllamaProvider(BaseLLMProvider):
                 logger.error(f"Ollama generation error: {e}")
                 raise
 
+    async def stream(self, prompt: str, system_prompt: str = None):
+        messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
+            {"role": "user", "content": prompt}]
+        payload = {"model": self.model, "messages": messages, "stream": True, "keep_alive": KEEP_ALIVE}
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        if text := chunk.get("message", {}).get("content", ""):
+                            yield text
+                        if chunk.get("done"):
+                            break
+        except httpx.ConnectError:
+            logger.error("Ollama service is not running or unreachable.")
+            raise ConnectionError("Local Ollama service is unavailable. Start Ollama.")
+        except httpx.TimeoutException:
+            logger.error("Ollama stream timed out.")
+            raise TimeoutError("Local Ollama model timed out. The model may be loading or overloaded.")
+
     async def extract_query_parameters(self, query: str, allowed_intents: list[str]) -> dict:
         system_prompt = (
             "You are an information extraction engine for the AegisGraph Graph-RAG pipeline.\n"

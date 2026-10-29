@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useChat, type Message } from '../contexts/ChatContext';
+import { useChat, type Message, type PendingAnswer } from '../contexts/ChatContext';
 import { Send, Loader2, ShieldBan, Database, Network, ArrowRight, MessagesSquare } from 'lucide-react';
 import clsx from 'clsx';
 import { FormattedText } from './FormattedText';
@@ -18,6 +18,7 @@ function fitToContent(el: HTMLTextAreaElement | null) {
 interface ChatPanelProps {
   messages: Message[];
   loading: boolean;
+  pending?: PendingAnswer | null;
   error?: string | null;
   onSendMessage: (msg: string) => void;
 }
@@ -80,14 +81,14 @@ function AgentMeta({ msg }: { msg: Message }) {
   );
 }
 
-export function ChatPanel({ messages, loading, error, onSendMessage }: ChatPanelProps) {
+export function ChatPanel({ messages, loading, pending, error, onSendMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, loading, pending?.text]);
 
   useEffect(() => {
     if (!loading) inputRef.current?.focus();
@@ -161,12 +162,21 @@ export function ChatPanel({ messages, loading, error, onSendMessage }: ChatPanel
             );
           })}
 
-          {loading && (
+          {loading && pending?.text ? (
+            // The answer as it is being written; replaced by the finished message (with
+            // badges and policy details) when the server sends it.
+            <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" aria-live="polite">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+                <FormattedText text={pending.text} />
+                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-500 align-middle" aria-hidden />
+              </div>
+            </div>
+          ) : loading && (
             <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" role="status">
               <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
               <div>
-                <div className="text-sm text-slate-100">Checking risk and searching the graph…</div>
-                <div className="text-xs text-slate-400">Local models can take up to a minute.</div>
+                <div className="text-sm text-slate-100">{pending?.status || 'Working…'}</div>
+                <div className="text-xs text-slate-400">Checking risk, fetching data from the graph, then writing the answer.</div>
               </div>
             </div>
           )}

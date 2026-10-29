@@ -13,7 +13,7 @@ import { ModeBadge } from '../components/ModeBadge';
 type Panel = 'graph' | 'risk' | null;
 
 export function QueryPlayground() {
-  const { messages, loading, error, sendMessage, llmProvider, setLlmProvider } = useChat();
+  const { messages, loading, pending, error, sendMessage, llmProvider, setLlmProvider } = useChat();
   // Models the server offers; OpenRouter is greyed out when it has no API key.
   const [llmInfo, setLlmInfo] = useState<LlmProviderInfo[]>([]);
   useEffect(() => {
@@ -88,7 +88,7 @@ export function QueryPlayground() {
           </div>
         </header>
         <div className="min-h-0 flex-1">
-          <ChatPanel messages={messages} loading={loading} error={error} onSendMessage={sendMessage} />
+          <ChatPanel messages={messages} loading={loading} pending={pending} error={error} onSendMessage={sendMessage} />
         </div>
       </section>
 

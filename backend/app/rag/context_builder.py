@@ -149,6 +149,11 @@ class ContextBuilder:
     def _format_generic(self, response: RetrievalResponse, results: List[Dict[str, Any]]) -> List[str]:
         header = self._get_subject_header(response)
         parts = ["RETRIEVED GRAPH RECORDS"]
+        if response.strategy == "mcp_agent":
+            # Agent rows often list only the answer (e.g. someone's contacts) without repeating
+            # the person asked about, which small answer models read as "not found".
+            parts[0] += (f" (fetched to answer: {response.query!r}; these rows ARE the answer data, "
+                         "even if they do not repeat the name that was asked about)")
         if header:
             parts.append(header)
         for row in results:
