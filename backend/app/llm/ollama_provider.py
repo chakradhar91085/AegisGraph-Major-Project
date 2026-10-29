@@ -12,6 +12,10 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Ollama unloads an idle model after 5 minutes by default, and loading it again costs
+# ~20 s on the next question. Keep it resident while the app is in use.
+KEEP_ALIVE = "30m"
+
 
 class OllamaProvider(BaseLLMProvider):
     def __init__(self):
@@ -32,6 +36,7 @@ class OllamaProvider(BaseLLMProvider):
             "model": self.model,
             "messages": messages,
             "stream": False,
+            "keep_alive": KEEP_ALIVE,
         }
 
         async with httpx.AsyncClient(timeout=90.0) as client:

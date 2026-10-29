@@ -9,6 +9,7 @@ Security pipeline executes BEFORE any context reaches the LLM.
 """
 import logging
 import re
+import time
 from app.retrieval.schemas import RetrievalRequest, RetrievalResponse, RetrievalIntent, ResolutionStatus
 from app.retrieval.service import retrieval_service
 from app.retrieval import mcp_agent
@@ -111,6 +112,7 @@ class GraphRAGService:
             max_depth=policy.effective_graph_depth,
             response_mode=policy.response_mode.value
         )
+        t_retrieval = time.perf_counter()
         try:
             retrieval_response = None
             if settings.RETRIEVAL_MODE == "agent":
@@ -218,8 +220,11 @@ class GraphRAGService:
         )
 
         # ── 5. Call LLM (provider-selected) ──
+        t_answer = time.perf_counter()
         try:
             answer = await provider.generate(mask_text(query, names) if mask else query, secure_context)
+            logger.info(f"Timing: retrieval {t_answer - t_retrieval:.1f}s, answer ({provider_tag}) "
+                        f"{time.perf_counter() - t_answer:.1f}s, context {len(secure_context)} chars")
             if "An error occurred while generating the response" in answer:
                 raise Exception("LLM provider returned failure string.")
         except (ConnectionError, TimeoutError) as e:
