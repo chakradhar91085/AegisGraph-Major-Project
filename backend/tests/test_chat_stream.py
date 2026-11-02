@@ -1,4 +1,4 @@
-"""/chat/stream: server-sent events, the same answer as /chat, one question per user."""
+"""/chat/stream: server-sent events, one question per user."""
 import json
 
 import pytest
@@ -27,7 +27,7 @@ def client(monkeypatch):
         for piece in ["Hello", " there"]:
             events.put_nowait(("token", piece))
         return {"answer": "Hello there", "intent": "agent_query", "retrieval": {"status": "success"},
-                "telemetry": {"response_mode": "ALLOW"}, "llm_provider": "ollama"}
+                "telemetry": {"response_mode": "ALLOW"}}
 
     monkeypatch.setattr(graph_rag_service, "generate_answer", fake_answer)
     yield TestClient(app)

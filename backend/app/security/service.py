@@ -80,18 +80,9 @@ class AegisSecurityService:
         risk_key = ctx["risk_key"]
         current_time = ctx["timestamp"]
         
-        # Entities come from whatever the retrieval layer already resolved
-        # for this query (e.g. the employee name in an employee_lookup) —
-        # cheap and avoids a second, separate entity-extraction pass.
-        entities = []
-        if hasattr(retrieval_response, "resolved_entities"):
-            for resolved in retrieval_response.resolved_entities:
-                if resolved.query_value:
-                    entities.append(resolved.query_value)
-                    
-        # Filter out empty entities just in case
-        entities = [e for e in entities if e]
-        
+        # People the agent's rows named, so no separate entity-extraction pass is needed.
+        entities = retrieval_response.entities
+
         # Get history for temporal and entity calculations.
         # History currently does NOT include the CURRENT query yet.
         state = session_store.get_or_create_session(risk_key)
@@ -144,7 +135,7 @@ class AegisSecurityService:
         )
         session_store.add_query_record(risk_key, record)
         session_store.update_smoothed_risk(risk_key, smoothed_risk)
-        retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "restricted_by_policy", "none", "error")
+        retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "error")
 
         self._alert_admin(ctx, state, smoothed_risk, answer_exposure)
 
@@ -168,8 +159,7 @@ class AegisSecurityService:
             response_mode=ctx["policy"].response_mode,
             cypher_queries=retrieval_response.metadata.get("cypher", []),
             exposure=answer_exposure,
-            retrieval_model=retrieval_response.metadata.get("agent_model")
-            or ("fixed queries" if retrieval_executed else None),
+            retrieval_model=retrieval_response.metadata.get("agent_model"),
         )
 
     @staticmethod

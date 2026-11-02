@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 from app.core.config import settings
-import math
 import numpy as np
 
 logger = logging.getLogger(__name__)

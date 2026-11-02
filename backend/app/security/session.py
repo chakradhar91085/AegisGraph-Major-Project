@@ -1,5 +1,4 @@
-from typing import Dict, List
-import time
+from typing import Dict
 import logging
 from app.core.config import settings
 from app.security.models import SessionState, QueryRecord

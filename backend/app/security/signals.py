@@ -112,26 +112,10 @@ class Signals:
         """
         S_graph(t) = (d_t / d_max) + eta * (v_t / v_max)
         """
-        depth_map = {
-            "employee_lookup": 1,
-            "received_emails": 2,
-            "sent_emails": 2,
-            "frequent_communication": 2,
-            "topical_footprint": 2,
-            "email_chunks": 3,
-            "chunk_entities": 4,
-            "person_connection": 4,
-            "entity_relationships": 5,
-            "all_employees": 2,
-            "semantic_search": 3,
-            "agent_query": 3,  # free-form agent Cypher; its rows still count via result_count
-        }
-        
-        d_t = depth_map.get(intent, 0)
-        
-        if d_t == 0:
+        if intent != "agent_query":
             return 0.0
 
+        d_t = 3  # free-form agent Cypher has no known depth; its rows still count via result_count
         v_t = result_count
         
         d_max = float(settings.SECURITY_GRAPH_MAX_DEPTH)

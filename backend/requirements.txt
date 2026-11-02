@@ -1,19 +1,20 @@
-# Pinned to the versions this project was tested with (pip freeze, 2026-10-07).
+# Pinned to the versions this project was tested with (2026-11-02).
 fastapi==0.141.1
-uvicorn==0.52.4
-neo4j==6.2.0
+uvicorn==0.54.0
+neo4j==6.4.1
 httpx==0.28.1
-python-dotenv==1.2.3
-pydantic==2.13.4
-pydantic-settings==2.15.0
-sentence-transformers==6.0.0
+python-dotenv==1.2.4
+pydantic==2.14.2
+pydantic-settings==2.16.2
+sentence-transformers==6.2.0
 SQLAlchemy==2.0.52
-asyncpg==0.31.0
-PyJWT==2.15.0
-cryptography==50.0.1  # PyJWT needs it to verify Clerk's RS256 tokens
-
-# Only the offline ingestion pipeline (app/ingestion) uses spaCy, not the API.
-spacy==3.8.16
+asyncpg==0.32.0
+PyJWT==2.15.1
+cryptography==50.0.2  # PyJWT needs it to verify Clerk's RS256 tokens
 
 # Neo4j MCP server used by the retrieval agent (app/retrieval/mcp_agent.py); pulls in the mcp client SDK.
 mcp-neo4j-cypher==0.6.0
+
+# Tests
+pytest==9.2.0
+pytest-asyncio==1.4.1.post1

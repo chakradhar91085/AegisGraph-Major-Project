@@ -13,29 +13,15 @@ class Settings(BaseSettings):
     NEO4J_PASSWORD: str
     NEO4J_DATABASE: str = "aegisgraph"
 
-    # LLM Settings
-    LLM_PROVIDER: str = "ollama"
-    
-    # Ollama Settings
+    # The local model that writes every answer (Ollama)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
 
-    # OpenRouter Settings (used when LLM_PROVIDER=openrouter)
-    OPENROUTER_API_KEY: str = ""
-    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    OPENROUTER_MODEL: str = "qwen/qwen3.7-flash"
-
-    # Retrieval: "agent" = an LLM writes read-only Cypher through the Neo4j MCP
-    # server (falls back to "fixed" on any failure); "fixed" = the pre-written
-    # parameterized queries only.
-    RETRIEVAL_MODE: str = "agent"
-    # The agent's LLM: any OpenAI-compatible endpoint (default NVIDIA build.nvidia.com,
-    # ~40 requests/min free). If it fails, the agent retries on OpenRouter's free model.
-    # The Llama/OpenRouter toggle only picks the model that writes the final answer.
+    # The agent's LLM, which writes read-only Cypher through the Neo4j MCP server.
+    # NVIDIA build.nvidia.com, ~40 requests/min free.
     AGENT_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     AGENT_API_KEY: str = ""
     AGENT_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b"
-    AGENT_FALLBACK_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     AGENT_MAX_STEPS: int = 4
     # Read-only Neo4j login (role "reader") the MCP server connects with.
     NEO4J_READER_USERNAME: str = ""
@@ -43,7 +29,6 @@ class Settings(BaseSettings):
 
     # Context Builder Settings
     MAX_RECORDS: int = 20
-    MAX_CHUNK_CHARS: int = 1500
     MAX_CONTEXT_CHARS: int = 8000
 
     # Postgres Configuration (required: set in .env, never hardcode credentials)
@@ -87,7 +72,6 @@ class Settings(BaseSettings):
     SECURITY_SEMANTIC_WINDOW_SIZE: int = 5
     SECURITY_TEMPORAL_WINDOW_SECONDS: int = 60
     SECURITY_ALPHA_TEMP: float = 0.05
-    SECURITY_TEMPORAL_THRESHOLD: int = 5
     SECURITY_GRAPH_MAX_DEPTH: int = 5
     SECURITY_GRAPH_MAX_NODES: int = 50
     SECURITY_GRAPH_WEIGHT: float = 0.5

@@ -1,4 +1,5 @@
 """API-level checks for the authentication model (no Neo4j / LLM needed)."""
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,7 +12,8 @@ from app.security.auth import User, current_user
 from app.security.tickets import issue_ticket
 
 client = TestClient(app)
-FAKE_RESULT = {"answer": "ok", "intent": "employee_lookup", "retrieval": {}, "telemetry": None}
+FAKE_RESULT = {"answer": "ok", "intent": "agent_query", "retrieval": {}, "telemetry": None}
+CHAT = "/api/v1/chat/stream"
 
 
 @pytest.fixture(autouse=True)
@@ -24,8 +26,13 @@ def login_as(user_id: str, role: str = "Standard"):
     app.dependency_overrides[current_user] = lambda: User(user_id, role)
 
 
+def final_answer(response) -> dict:
+    """The `done` event's data, which carries the full ChatResponse."""
+    return json.loads(response.text.split("event: done\ndata: ")[1].split("\n")[0])
+
+
 def test_chat_requires_login():
-    assert client.post("/api/v1/chat", json={"query": "hi"}).status_code == 401
+    assert client.post(CHAT, json={"query": "hi"}).status_code == 401
 
 
 def test_audit_requires_login_and_admin_role():
@@ -38,7 +45,7 @@ def test_audit_requires_login_and_admin_role():
 def test_role_in_request_body_is_ignored():
     login_as("u1", "Standard")
     with patch("app.api.chat.graph_rag_service.generate_answer", new_callable=AsyncMock, return_value=FAKE_RESULT) as gen:
-        r = client.post("/api/v1/chat", json={"query": "hi", "role": "Auditor"})
+        r = client.post(CHAT, json={"query": "hi", "role": "Auditor"})
     assert r.status_code == 200
     assert gen.call_args.kwargs["role"] == "Standard"
     assert gen.call_args.kwargs["user_id"] == "u1"
@@ -48,16 +55,16 @@ def test_another_users_ticket_is_not_honored():
     ticket, sid = issue_ticket("alice")
     login_as("mallory")
     with patch("app.api.chat.graph_rag_service.generate_answer", new_callable=AsyncMock, return_value=FAKE_RESULT):
-        r = client.post("/api/v1/chat", json={"query": "hi", "session_token": ticket})
-    assert r.json()["session_id"] != sid
+        r = client.post(CHAT, json={"query": "hi", "session_token": ticket})
+    assert final_answer(r)["session_id"] != sid
 
 
 def test_own_ticket_continues_the_session():
     ticket, sid = issue_ticket("alice")
     login_as("alice")
     with patch("app.api.chat.graph_rag_service.generate_answer", new_callable=AsyncMock, return_value=FAKE_RESULT):
-        r = client.post("/api/v1/chat", json={"query": "hi", "session_token": ticket})
-    assert r.json()["session_id"] == sid
+        r = client.post(CHAT, json={"query": "hi", "session_token": ticket})
+    assert final_answer(r)["session_id"] == sid
 
 
 def test_risk_reset_is_off_unless_demo_flag_set():
@@ -77,7 +84,8 @@ def test_ordinary_users_can_never_reset_their_risk():
 def test_second_question_while_first_is_running_is_refused():
     login_as("busy")
     lock = chat._user_locks["busy"]
-    with patch.object(lock, "locked", return_value=True),          patch("app.api.chat.graph_rag_service.generate_answer", new_callable=AsyncMock, return_value=FAKE_RESULT) as gen:
-        r = client.post("/api/v1/chat", json={"query": "hi"})
+    with patch.object(lock, "locked", return_value=True), \
+         patch("app.api.chat.graph_rag_service.generate_answer", new_callable=AsyncMock, return_value=FAKE_RESULT) as gen:
+        r = client.post(CHAT, json={"query": "hi"})
     assert r.status_code == 429
     gen.assert_not_called()

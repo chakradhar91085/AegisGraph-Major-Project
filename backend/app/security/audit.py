@@ -1,6 +1,3 @@
-import json
-import os
-from pathlib import Path
 from typing import Dict, Any
 import logging
 import datetime
@@ -13,7 +10,7 @@ logger = logging.getLogger(__name__)
 SEVERITY_ORDER = {"ALLOW": 0, "MASK": 1, "RESTRICT": 2, "BLOCK": 3}
 
 class PostgresAuditLogger:
-    async def log_event_async(self, telemetry: Dict[str, Any], llm_provider: str = None):
+    async def log_event_async(self, telemetry: Dict[str, Any]):
         try:
             session_id = telemetry.get("session_id")
             if not session_id:
@@ -96,7 +93,7 @@ class PostgresAuditLogger:
                     role=role,
                     user_id=telemetry.get("user_id"),
                     user_email=telemetry.get("user_email"),
-                    llm_provider=llm_provider,
+                    llm_provider="ollama",
                     instantaneous_risk=telemetry.get("instantaneous_risk", 0.0),
                     signals=telemetry.get("signals"),
                     policy=telemetry.get("policy"),

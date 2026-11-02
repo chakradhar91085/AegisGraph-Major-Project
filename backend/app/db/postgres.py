@@ -21,11 +21,6 @@ AsyncSessionLocal = async_sessionmaker(
 # Declarative base for models
 Base = declarative_base()
 
-async def get_db() -> AsyncSession:
-    """Dependency for FastAPI endpoints if needed."""
-    async with AsyncSessionLocal() as session:
-        yield session
-
 async def init_db():
     """Create tables if they don't exist, and widen existing ones for new columns."""
     async with engine.begin() as conn:

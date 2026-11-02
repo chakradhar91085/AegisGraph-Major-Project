@@ -1,7 +1,45 @@
-"""guard_cypher: the first of the MCP agent's read-only layers."""
+"""guard_cypher: the first of the MCP agent's read-only layers. Also the agent's retry."""
+from unittest.mock import AsyncMock
+
+import httpx
 import pytest
 
+from app.retrieval import mcp_agent
 from app.retrieval.mcp_agent import guard_cypher
+
+
+def _agent_answers(monkeypatch, statuses: list[int]) -> list[int]:
+    """Make the agent endpoint answer with these status codes; returns the ones used."""
+    used = []
+
+    def handler(request):
+        used.append(statuses[len(used)])
+        return httpx.Response(used[-1], json={"choices": [{"message": {"content": "ok"}}]})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(mcp_agent.httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(mcp_agent.asyncio, "sleep", AsyncMock())
+    return used
+
+
+async def test_agent_retries_a_brief_outage(monkeypatch):
+    used = _agent_answers(monkeypatch, [503, 429, 200])
+    assert (await mcp_agent._chat([]))["content"] == "ok"
+    assert len(used) == 3
+
+
+async def test_agent_gives_up_after_a_long_outage(monkeypatch):
+    used = _agent_answers(monkeypatch, [503, 503, 503, 503])
+    with pytest.raises(httpx.HTTPStatusError):
+        await mcp_agent._chat([])
+    assert len(used) == 4
+
+
+async def test_agent_does_not_retry_a_bad_key(monkeypatch):
+    used = _agent_answers(monkeypatch, [401])
+    with pytest.raises(httpx.HTTPStatusError):
+        await mcp_agent._chat([])
+    assert len(used) == 1
 
 
 def test_adds_limit_when_missing():

@@ -359,21 +359,21 @@ THEME_STOPWORDS = ["re", "fw", "fwd", "enron", "ect", "hou", "cc", "pm", "am", "
 
 
 def name_themes(themes: list[dict]) -> None:
-    """One OpenRouter call names every cluster; falls back to its top keywords."""
+    """One LLM call names every cluster; falls back to its top keywords."""
     import json
     import httpx
     for t in themes:
         t["name"] = " / ".join(t["keywords"][:3])
-    if not settings.OPENROUTER_API_KEY:
+    if not settings.AGENT_API_KEY:
         return
     listing = "\n".join(f'{t["id"]}: keywords={t["keywords"]}; subjects={t["samples"]}' for t in themes)
     prompt = ("Name each cluster of Enron emails with a short business theme (2-4 words, Title Case). "
               'Reply with JSON only: {"<id>": "<name>", ...}.\n\n' + listing)
     try:
-        r = httpx.post(f"{settings.OPENROUTER_BASE_URL.rstrip('/')}/chat/completions", timeout=180,
-                       headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
-                       json={"model": settings.AGENT_FALLBACK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                             "temperature": 0, "reasoning": {"enabled": False}})
+        r = httpx.post(f"{settings.AGENT_BASE_URL.rstrip('/')}/chat/completions", timeout=180,
+                       headers={"Authorization": f"Bearer {settings.AGENT_API_KEY}"},
+                       json={"model": settings.AGENT_MODEL, "messages": [{"role": "user", "content": prompt}],
+                             "temperature": 0, "chat_template_kwargs": {"enable_thinking": False}})
         r.raise_for_status()
         text = r.json()["choices"][0]["message"]["content"]
         names = json.loads(text[text.find("{"):text.rfind("}") + 1])

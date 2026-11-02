@@ -3,10 +3,6 @@ from app.core.config import settings
 from app.security.models import AdaptivePolicy, RiskLevel, ResponseMode
 
 # Static Role Policies.
-# Standard's depth must be >= 2 so its baseline can still satisfy the most
-# basic email-retrieval intents (sent_emails/received_emails, depth 2) at
-# low risk -- a depth of 1 would permanently restrict them regardless of
-# behavior, which defeats the point of a "default working" role.
 ROLE_POLICIES = {
     "Auditor": {"max_context_limit": 50, "max_graph_depth": 5},
     "Analyst": {"max_context_limit": 30, "max_graph_depth": 3},

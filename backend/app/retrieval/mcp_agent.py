@@ -1,7 +1,7 @@
 """
 AegisGraph — MCP retrieval agent.
 
-An LLM (OpenRouter) fetches the evidence for a question by writing its own
+An LLM (NVIDIA build) fetches the evidence for a question by writing its own
 read-only Cypher, run through the Neo4j MCP server (mcp-neo4j-cypher). Four
 independent layers keep that read-only and bounded:
   1. guard_cypher() below: one statement, no write/admin keywords or procedures,
@@ -11,9 +11,6 @@ independent layers keep that read-only and bounded:
   3. it connects as a Neo4j user with the built-in `reader` role, so the
      database itself refuses writes;
   4. a 15 s read timeout.
-
-retrieve() returns the same RetrievalResponse as the fixed pipeline, so risk
-scoring, masking, the answer prompt and the audit trail work unchanged.
 """
 import asyncio
 import json
@@ -27,9 +24,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from app.core.config import settings
-from app.retrieval.schemas import (
-    RetrievalRequest, RetrievalResponse, RetrievalIntent, ResolvedEntity, ResolutionStatus,
-)
+from app.db.neo4j import neo4j_client
+from app.retrieval.schemas import RetrievalRequest, RetrievalResponse, RetrievalIntent
+from app.security.embeddings import embedding_provider
 from app.security.masking import mask_text, names_from_text, names_from_records
 
 logger = logging.getLogger(__name__)
@@ -211,36 +208,33 @@ Examples of good queries:
 _EMAIL = re.compile(r"[\w.%+-]+@[\w.-]+\.[a-z]{2,}", re.IGNORECASE)
 
 
-def _endpoints() -> list[tuple[str, str, str]]:
-    """(base_url, api_key, model) in the order to try: the configured agent provider
-    (NVIDIA build by default), then OpenRouter's free model."""
-    out = []
-    if settings.AGENT_API_KEY:
-        out.append((settings.AGENT_BASE_URL, settings.AGENT_API_KEY, settings.AGENT_MODEL))
-    if settings.OPENROUTER_API_KEY:
-        out.append((settings.OPENROUTER_BASE_URL, settings.OPENROUTER_API_KEY, settings.AGENT_FALLBACK_MODEL))
-    return out
+SEMANTIC_SEARCH = """
+CALL db.index.vector.queryNodes('email_embeddings', $limit, $embedding)
+YIELD node AS e, score
+OPTIONAL MATCH (p:Person)-[:SENT]->(e)
+RETURN e.emailId AS email_id, e.subject AS subject, e.body AS body, e.sent_at AS timestamp,
+       p.email AS sender_email, p.name AS sender_name, score
+ORDER BY score DESC
+"""
 
 
 async def _chat(messages: list[dict]) -> dict:
-    last_error: Exception | None = None
-    for base_url, key, model in _endpoints():
-        payload = {
-            "model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "temperature": 0,
-            # Thinking tokens add latency and cost nothing useful here; each provider names the switch differently.
-            **({"chat_template_kwargs": {"enable_thinking": False}} if "nvidia.com" in base_url
-               else {"reasoning": {"enabled": False}}),
-        }
-        try:
-            async with httpx.AsyncClient(timeout=90) as client:
-                r = await client.post(f"{base_url.rstrip('/')}/chat/completions", json=payload,
-                                      headers={"Authorization": f"Bearer {key}"})
-                r.raise_for_status()
-                return {**r.json()["choices"][0]["message"], "_model": model}
-        except Exception as e:  # rate limit, outage, bad key: try the next provider
-            logger.warning(f"Agent LLM {base_url} ({model}) failed: {e!r}")
-            last_error = e
-    raise last_error or RuntimeError("No agent LLM key configured (AGENT_API_KEY / OPENROUTER_API_KEY)")
+    payload = {
+        "model": settings.AGENT_MODEL, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "temperature": 0,
+        # Thinking tokens add latency and cost nothing useful here.
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    async with httpx.AsyncClient(timeout=90) as client:
+        # The free endpoint often answers 503 for a moment; there is no other retrieval path to fall back on.
+        for wait in (1, 2, 4, None):
+            r = await client.post(f"{settings.AGENT_BASE_URL.rstrip('/')}/chat/completions", json=payload,
+                                  headers={"Authorization": f"Bearer {settings.AGENT_API_KEY}"})
+            if wait is None or r.status_code not in (429, 500, 502, 503, 504):
+                break
+            logger.warning(f"Agent LLM answered {r.status_code}; retrying in {wait} s")
+            await asyncio.sleep(wait)
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]
 
 
 async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str:
@@ -256,14 +250,12 @@ async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str
             except json.JSONDecodeError:
                 raise ValueError("Result too large: return fewer or shorter fields.")
         elif name == "search_emails_by_meaning":
-            from app.security.embeddings import embedding_provider
-            from app.retrieval.strategies import retrieval_strategies
             topic = str(args.get("text", ""))
             embedding = await embedding_provider.get_embedding(topic)
             if not embedding:
                 raise ValueError("Could not embed the search text.")
             cyphers.append(f"[vector search] {topic}")
-            rows = await retrieval_strategies.semantic_graph_search(embedding, limit=limit)
+            rows = await neo4j_client.execute_read(SEMANTIC_SEARCH, {"embedding": embedding, "limit": limit})
             for row in rows:
                 if row.get("body"):
                     row["body"] = row["body"][:400]
@@ -279,10 +271,9 @@ async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str
 
 
 async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
-    """Let the agent fetch evidence. Raises on infrastructure failure so the
-    caller can fall back to the fixed pipeline."""
-    if not _endpoints():
-        raise RuntimeError("No agent LLM key configured (AGENT_API_KEY / OPENROUTER_API_KEY)")
+    """Let the agent fetch evidence. Raises on infrastructure failure."""
+    if not settings.AGENT_API_KEY:
+        raise RuntimeError("No agent LLM key configured (AGENT_API_KEY)")
 
     limit = request.limit  # the user's risk policy decides how many rows the agent may see
     mask = request.response_mode == "MASK"
@@ -291,10 +282,8 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
     batches: list[list[dict]] = []
     cyphers: list[str] = []
 
-    model = None
     for _ in range(settings.AGENT_MAX_STEPS):
         msg = await _chat(messages)
-        model = msg.pop("_model", model)
         calls = msg.get("tool_calls") or []
         if not calls:
             break
@@ -325,14 +314,10 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
 
     return RetrievalResponse(
         query=request.query,
-        intent="agent_query" if cyphers else RetrievalIntent.UNSUPPORTED.value,
-        resolved_entities=[
-            ResolvedEntity(type="employee", query_value=e, status=ResolutionStatus.FOUND,
-                           matches=[{"email": e, "name": None}])
-            for e in emails[:3]
-        ],
+        intent=RetrievalIntent.AGENT_QUERY.value if cyphers else RetrievalIntent.UNSUPPORTED.value,
+        entities=emails[:3],
         results=results,
         result_count=len(results),
         strategy="mcp_agent",
-        metadata={"cypher": cyphers, "agent_model": model},
+        metadata={"cypher": cyphers, "agent_model": settings.AGENT_MODEL},
     )

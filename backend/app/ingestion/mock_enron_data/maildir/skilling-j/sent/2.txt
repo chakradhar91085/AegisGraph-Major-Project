@@ -1,7 +1,0 @@
-Message-ID: <12345.1000000001.JavaMail.evans@thyme>
-Date: Wed, 10 Jan 2001 10:00:00 -0800 (PST)
-From: jeff.skilling@enron.com
-To: kenneth.lay@enron.com
-Subject: Raptor structure
-
-Ken, we need to discuss the Raptor structure tomorrow. Let's meet at 10 AM.
