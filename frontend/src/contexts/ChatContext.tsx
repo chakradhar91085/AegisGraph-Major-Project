@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
 import { chatApi, ChatStreamError } from '../api';
-import type { TelemetryEvent, GraphVisualizationPayload, LlmProvider } from '../api';
+import type { TelemetryEvent, GraphVisualizationPayload } from '../api';
 
 export interface Message {
   id: string;
@@ -9,7 +9,6 @@ export interface Message {
   text: string;
   telemetry?: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
-  llm_provider?: string;
   llm_model?: string;
 }
 
@@ -40,8 +39,6 @@ interface ChatContextType {
   pending: PendingAnswer | null;
   error: string | null;
 
-  llmProvider: LlmProvider;
-  setLlmProvider: (p: LlmProvider) => void;
   sendMessage: (text: string) => Promise<void>;
   clearSession: () => void;
   resetConversation: () => void;
@@ -60,21 +57,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const [activeGraphData, setActiveGraphData] = useState<GraphVisualizationPayload | null>(null);
 
-  // Which model answers. Llama (Ollama) unless the user switches; remembered in this browser.
-  const [llmProvider, setLlmProviderState] = useState<LlmProvider>(() => {
-    try {
-      return localStorage.getItem('aegis_llm_provider') === 'openrouter' ? 'openrouter' : 'ollama';
-    } catch {
-      return 'ollama';
-    }
-  });
-  const setLlmProvider = useCallback((p: LlmProvider) => {
-    setLlmProviderState(p);
-    try {
-      localStorage.setItem('aegis_llm_provider', p);
-    } catch { /* storage blocked: the choice just won't persist */ }
-  }, []);
-
   const sendMessage = useCallback(async (text: string) => {
     const userMessage: Message = { id: Date.now().toString(), sender: 'user', text };
     setMessages((prev) => [...prev, userMessage]);
@@ -84,7 +66,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const sessionToken = sessionStorage.getItem('aegis_session_token') || undefined;
-      const response = await chatApi.sendMessageStream(text, sessionToken, llmProvider, {
+      const response = await chatApi.sendMessageStream(text, sessionToken, {
         onStatus: (status) => setPending((p) => ({ text: '', ...p, status })),
         onToken: (piece) => setPending((p) => ({ status: '', ...p, text: (p?.text ?? '') + piece })),
       });
@@ -100,7 +82,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         text: response.answer,
         telemetry: response.telemetry,
         graph_data: response.graph_data,
-        llm_provider: response.llm_provider,
         llm_model: response.llm_model,
       };
 
@@ -116,7 +97,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setPending(null);
     }
-  }, [llmProvider]);
+  }, []);
 
   // Forget the conversation in this browser tab (used on sign-out, so the next
   // person on the same browser never sees the previous user's chat).
@@ -148,7 +129,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContext.Provider value={{
-      messages, loading, pending, error, llmProvider, setLlmProvider,
+      messages, loading, pending, error,
       sendMessage, clearSession, resetConversation, endActiveSession,
       activeGraphData, setActiveGraphData
     }}>

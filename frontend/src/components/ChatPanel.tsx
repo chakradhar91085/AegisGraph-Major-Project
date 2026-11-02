@@ -45,14 +45,12 @@ function AgentMeta({ msg }: { msg: Message }) {
         </span>
         {t.retrieval_model && (
           <span className="rounded border border-slate-800 px-2 py-0.5 font-mono"
-            title={t.retrieval_model === 'fixed queries'
-              ? 'Fetched with the pre-written graph queries'
-              : 'Fetched by the AI agent writing read-only Cypher through the Neo4j MCP server'}>
+            title="Fetched by the AI agent writing read-only Cypher through the Neo4j MCP server">
             Data: {t.retrieval_model.split('/').pop()}
           </span>
         )}
         {msg.llm_model && (
-          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title={`Answer written by ${msg.llm_provider === 'openrouter' ? 'OpenRouter (hosted)' : 'Ollama (local)'}`}>
+          <span className="rounded border border-slate-800 px-2 py-0.5 font-mono" title="Answer written by Ollama (local)">
             Answer: {msg.llm_model.split('/').pop()}
           </span>
         )}

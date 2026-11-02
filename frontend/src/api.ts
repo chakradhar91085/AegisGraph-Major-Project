@@ -62,26 +62,7 @@ export interface TelemetryEvent {
   role: string;
   response_mode: 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
   exposure?: Exposure;
-  retrieval_model?: string | null; // MCP agent model, "fixed queries", or null
-}
-
-export type LlmProvider = 'ollama' | 'openrouter';
-
-export interface ChatRequest {
-  query: string;
-  session_token?: string;
-  llm_provider?: LlmProvider;
-}
-
-export interface LlmProviderInfo {
-  id: LlmProvider;
-  model: string;
-  available: boolean;
-}
-
-export interface LlmProvidersResponse {
-  default: LlmProvider;
-  providers: LlmProviderInfo[];
+  retrieval_model?: string | null; // MCP agent model, or null
 }
 
 export interface GraphNode {
@@ -114,7 +95,6 @@ export interface ChatResponse {
   status: string;
   telemetry: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
-  llm_provider?: string;
   llm_model?: string;
 }
 
@@ -145,13 +125,12 @@ export interface StreamHandlers {
 }
 
 export const chatApi = {
-  // Same pipeline as sendMessage, but the answer arrives as it is written. axios cannot
-  // read a response while it is still arriving, so this uses fetch. The final "done"
-  // event carries the complete ChatResponse and is the authoritative answer.
+  // The answer arrives as it is written. axios cannot read a response while it is
+  // still arriving, so this uses fetch. The final "done" event carries the complete
+  // ChatResponse and is the authoritative answer.
   async sendMessageStream(
     query: string,
     sessionToken: string | undefined,
-    llmProvider: LlmProvider | undefined,
     handlers: StreamHandlers,
   ): Promise<ChatResponse> {
     const token = tokenGetter ? await tokenGetter() : null;
@@ -160,7 +139,7 @@ export const chatApi = {
       res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ query, llm_provider: llmProvider, session_token: sessionToken }),
+        body: JSON.stringify({ query, session_token: sessionToken }),
       });
     } catch {
       throw new ChatStreamError(0, 'unreachable');
@@ -187,23 +166,6 @@ export const chatApi = {
       }
     }
     throw new ChatStreamError(0, 'The connection closed before the answer finished.');
-  },
-
-  async sendMessage(
-    query: string,
-    sessionToken?: string,
-    llmProvider?: LlmProvider,
-  ): Promise<ChatResponse> {
-    const payload: ChatRequest = { query, llm_provider: llmProvider };
-    if (sessionToken) {
-      payload.session_token = sessionToken;
-    }
-    const response = await axios.post<ChatResponse>(`${API_BASE}/chat`, payload);
-    return response.data;
-  },
-
-  async llmProviders(): Promise<LlmProvidersResponse> {
-    return (await axios.get<LlmProvidersResponse>(`${API_BASE}/llm/providers`)).data;
   },
 
   async me(): Promise<Identity> {
