@@ -65,6 +65,7 @@ export interface TelemetryEvent {
   response_mode: 'ALLOW' | 'MASK' | 'RESTRICT' | 'BLOCK';
   exposure?: Exposure;
   retrieval_model?: string | null; // MCP agent model, or null
+  reason?: string | null; // why a rule set the minimum risk, if one did
 }
 
 export interface GraphNode {
@@ -86,6 +87,15 @@ export interface GraphVisualizationPayload {
   edges: GraphEdge[];
 }
 
+// One record behind an answer, already masked by the server when the answer was.
+export interface RetrievedRecord {
+  title: string;
+  date: string | null;
+  fields: { name: string; value: string }[];
+  snippet: string | null;
+  labels: string[];
+}
+
 export interface ChatResponse {
   answer: string;
   session_id: string;
@@ -98,6 +108,7 @@ export interface ChatResponse {
   status: string;
   telemetry: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
+  records?: RetrievedRecord[];
   llm_model?: string;
 }
 

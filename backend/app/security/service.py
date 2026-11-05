@@ -162,6 +162,7 @@ class AegisSecurityService:
             user_id=ctx.get("user_id"),
             user_email=ctx.get("user_email"),
             response_mode=ctx["policy"].response_mode,
+            reason=ctx.get("gate_reason") or None,
             cypher_queries=retrieval_response.metadata.get("cypher", []),
             exposure=answer_exposure,
             retrieval_model=retrieval_response.metadata.get("agent_model"),

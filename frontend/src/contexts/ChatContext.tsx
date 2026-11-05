@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
 import { chatApi, ChatStreamError } from '../api';
-import type { TelemetryEvent, GraphVisualizationPayload } from '../api';
+import type { TelemetryEvent, GraphVisualizationPayload, RetrievedRecord } from '../api';
 
 export interface Message {
   id: string;
@@ -9,6 +9,7 @@ export interface Message {
   text: string;
   telemetry?: TelemetryEvent;
   graph_data?: GraphVisualizationPayload;
+  records?: RetrievedRecord[];
   llm_model?: string;
 }
 
@@ -82,6 +83,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         text: response.answer,
         telemetry: response.telemetry,
         graph_data: response.graph_data,
+        records: response.records,
         llm_model: response.llm_model,
       };
 

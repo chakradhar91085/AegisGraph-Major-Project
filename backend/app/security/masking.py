@@ -35,6 +35,8 @@ _WORD = re.compile(r"[^\W\d_][\w'’-]*")
 _MAX_NAME_WORDS = 4
 _known_names: set[str] = set()
 _name_words: set[str] = set()
+_known_surnames: set[str] = set()
+_known_first_names: set[str] = set()
 
 # Words that make a graph "name" not a person ("Thank You", "American Express", "All Employees").
 # Mostly measured: words the emails use in lower case far more than capitalised. A real person
@@ -68,6 +70,27 @@ service online weekly monthly power energy trading capital inc corp llc company 
 staff announcements administrator crawler migration restructuring analyst economist
 """.split())
 
+# Surnames that are also everyday words, places or firms, so they stay unless a title or the
+# full name shows they are a person ("cash flow", "Love it", "Morgan Stanley", "January").
+_AMBIGUOUS_SURNAMES = frozenset("""
+new may hope page cash house love security newsletter white cross rice black green sole announcement guest grant
+stage alert partners ring sweet booth grow alerts recipients social masters snow shoemaker rich pace stack port delivers
+bike gold gang wells styles rank webmaster dictionary couch harder gates grass tiller pagan loving confer brands berry
+gentle bridges rode goode moon stout heal lien iii relations young king
+january february march april june july august september october november december monday tuesday wednesday thursday
+friday saturday sunday south north east west edison sierra washington morgan jesus valley vegas texas california
+""".split())
+# A first name on its own line ("Michelle," or a sign-off) or after a greeting: the language model
+# misses these. In rows a line break is written as the two characters \n, and a value opens with a quote.
+_LINE_NAME = re.compile(r'(?:^|\n|\\n|\\r|")\s*([A-Z][a-z]+),?(?=\s*(?:\\[nr]|\n|$))', re.MULTILINE)
+_GREETED_NAME = re.compile(r"\b(?:[Hh]i|[Hh]ello|[Hh]ey|[Dd]ear)\s+([A-Z][a-z]+)\b")
+# "I spoke with Michelle": a first name is only safe to assume after a word that takes a person,
+# since capitalised first names are also words ("Mark to market", "Bill payment").
+_AFTER_PERSON_WORD = re.compile(r"\b(?:with|from|to|by|ask|asked|call|called|tell|told|thanks|for|and|cc)\s+([A-Z][a-z]{2,})\b")
+_NOT_GREETED = frozenset("thanks thank regards best cheers sincerely hello dear hi all team folks everyone sir madam attached yes no ok okay".split())
+_TITLED = re.compile(r"\b(?:Mr|Mrs|Ms|Dr)\.?\s+[A-Z][\w'’-]+")
+_CAPITALISED = re.compile(r"\b[A-Z][\w’-]*(?:'[A-Za-z]+)?\b")
+
 
 def _name_key(words: Iterable[str]) -> str:
     """'Kenneth L. Lay' and 'kenneth lay' compare equal: lower case, no initials, no possessive."""
@@ -75,10 +98,13 @@ def _name_key(words: Iterable[str]) -> str:
     return " ".join(w for w in cleaned if len(w) > 1)
 
 
-def load_names(names: Iterable[str]) -> None:
-    """Single words are skipped: 'legal' and 'houston' are in the graph as names too."""
+def load_names(names: Iterable[str], active: Iterable[str] = ()) -> None:
+    """Single words are skipped: 'legal' and 'houston' are in the graph as names too.
+    `active` people write or receive enough mail that their surname alone identifies them."""
     _known_names.clear()
     _name_words.clear()
+    _known_surnames.clear()
+    _known_first_names.clear()
     for name in names:
         words = name.split()
         if len(words) >= 2 and not any(w.lower().strip(".,") in _NOT_NAME_WORDS for w in words):
@@ -87,6 +113,12 @@ def load_names(names: Iterable[str]) -> None:
             _name_words.update(_name_key([w]) for w in words)
     _known_names.difference_update(k for k in list(_known_names) if " " not in k)
     _name_words.discard("")
+    for name in active:
+        words = name.split()
+        if (len(words) >= 2 and len(words[-1]) >= 3 and words[-1].lower() not in _AMBIGUOUS_SURNAMES
+                and not any(w.lower().strip(".,") in _NOT_NAME_WORDS for w in words)):
+            _known_surnames.add(words[-1].lower())
+            _known_first_names.add(words[0].lower())
 
 
 async def ensure_names() -> None:
@@ -95,8 +127,10 @@ async def ensure_names() -> None:
         return
     from app.db.neo4j import neo4j_client
     try:
-        rows = await neo4j_client.execute_read("MATCH (p:Person) WHERE p.name CONTAINS ' ' RETURN DISTINCT p.name AS name", {})
-        load_names(r["name"] for r in rows)
+        rows = await neo4j_client.execute_read(
+            "MATCH (p:Person) WHERE p.name CONTAINS ' ' RETURN DISTINCT p.name AS name, "
+            "coalesce(p.sent_count, 0) >= 20 OR coalesce(p.received_count, 0) >= 100 AS active", {})
+        load_names((r["name"] for r in rows), (r["name"] for r in rows if r["active"]))
         logger.info(f"Masking name list: {len(_known_names)} names")
     except Exception as e:
         logger.warning(f"Could not load the masking name list: {e}")
@@ -109,7 +143,8 @@ def _joinable(gap: str, previous: str) -> bool:
     return bool(re.fullmatch(r",?\s+", gap)) and "\n" not in gap
 
 
-def _mask_known_names(text: str) -> str:
+def _mask_known_names(text: str, found: set[str] | None = None) -> str:
+    """Hide full names from the list; `found` collects the ones this text contained."""
     if not _known_names:
         return text
     words = list(_WORD.finditer(text))
@@ -134,11 +169,63 @@ def _mask_known_names(text: str) -> str:
             start, end = words[i].start(), words[i + matched - 1].end()
             possessive = re.search(r"['’]s$", text[start:end])
             out += [text[position:start], "[REDACTED_NAME]"]
+            if found is not None:
+                found.add(" ".join(w.group() for w in words[i:i + matched]))
             position = end - (2 if possessive else 0)
             i += matched
         else:
             i += 1
     return "".join(out) + text[position:]
+
+
+def _mask_name_parts(text: str, names: Iterable[str]) -> str:
+    """Once a person is known to be in this answer, their first name or surname alone also identifies them."""
+    parts = set()
+    for name in names:
+        for word in name.split():
+            word = re.sub(r"['’]s$", "", word.strip(".,"))
+            if len(word) >= 3 and word.isalpha() and word.lower() not in _NOT_NAME_WORDS:
+                parts.update((word, word.capitalize(), word.upper()))
+    if not parts:
+        return text
+    alternatives = "|".join(sorted(map(re.escape, parts), key=len, reverse=True))
+    return re.sub(rf"\b(?:{alternatives})\b", "[REDACTED_NAME]", text)
+
+
+def _mask_surnames(text: str) -> str:
+    """Surnames of active people on their own ("linking Skilling and Fastow"), capitalised only."""
+    text = _TITLED.sub("[REDACTED_NAME]", text)
+    if not _known_surnames:
+        return text
+
+    def hide(match: re.Match) -> str:
+        word = match.group()
+        stem = re.sub(r"['’]s$", "", word)
+        return "[REDACTED_NAME]" + word[len(stem):] if stem.lower() in _known_surnames else word
+
+    return _CAPITALISED.sub(hide, text)
+
+
+def _mask_greetings(text: str) -> str:
+    def hide(match: re.Match) -> str:
+        word = match.group(1)
+        if word.lower() in _NOT_GREETED or (_name_words and word.lower() not in _name_words):
+            return match.group()
+        return match.group().replace(word, "[REDACTED_NAME]", 1)
+
+    def hide_first_name(match: re.Match) -> str:
+        word = match.group(1)
+        return match.group().replace(word, "[REDACTED_NAME]", 1) if word.lower() in _known_first_names else match.group()
+
+    return _AFTER_PERSON_WORD.sub(hide_first_name, _GREETED_NAME.sub(hide, _LINE_NAME.sub(hide, text)))
+
+
+def people_in(*texts: str) -> set[str]:
+    """Full names from the list that appear in these texts."""
+    found: set[str] = set()
+    for text in texts:
+        _mask_known_names(text, found)
+    return found
 
 
 # ── Names the graph does not hold ────────────────────────────────────────────
@@ -211,8 +298,12 @@ def mask_text(text: str, names=()) -> str:
 
 def scrub(text: str, names=()) -> str:
     """Everything MASK mode hides: identifiers, money and every name we can find."""
+    people = set(names)
     text = mask_text(text, names)
-    text = _mask_known_names(text)
+    text = _mask_known_names(text, people)
+    text = _mask_name_parts(text, people)
+    text = _mask_surnames(text)
+    text = _mask_greetings(text)
     text = _mask_detected_names(text)
     return _MONEY.sub("[REDACTED_AMOUNT]", text)
 
@@ -264,7 +355,7 @@ def safe_count(n: int, mask: bool) -> int | str:
     if n < MIN_CELL_SIZE:
         return f"fewer than {MIN_CELL_SIZE}"
     if mask:
-        return f"approximately {round(n, -2 if n >= 100 else -1):,}"
+        return f"approximately {max(10, round(n, -2 if n >= 100 else -1)):,}"
     return n
 
 

@@ -43,6 +43,7 @@ class ChatResponse(BaseModel):
     status: str
     telemetry: Optional[Dict[str, Any]] = None
     graph_data: Optional[Dict[str, Any]] = None
+    records: list[Dict[str, Any]] = []
     llm_model: Optional[str] = None
 
 @router.get("/me")
@@ -123,6 +124,7 @@ async def _answer(request: ChatRequest, user: User, events: asyncio.Queue) -> Ch
         retrieval=rag_result.get("retrieval", {}),
         telemetry=rag_result.get("telemetry", None),
         graph_data=rag_result.get("graph_data", None),
+        records=rag_result.get("records", []),
         llm_model=settings.OLLAMA_MODEL,
         status="success"
     )

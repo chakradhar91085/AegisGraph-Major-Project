@@ -110,6 +110,59 @@ def test_sentence_breaks_do_not_join_words_into_a_name(people):
     assert masking._mask_known_names("We asked David. Oxley replied.") == "We asked David. Oxley replied."
 
 
+def test_surnames_alone_are_hidden_but_ordinary_words_are_not():
+    load_names(["Jeff Skilling", "Andrew Fastow", "Phillip Love", "Michelle Cash"],
+               active=["Jeff Skilling", "Andrew Fastow", "Phillip Love", "Michelle Cash"])
+    masked = masking._mask_surnames("Emails linking Skilling and Fastow; Skilling's memo")
+    assert "Skilling" not in masked and "Fastow" not in masked and "[REDACTED_NAME]'s memo" in masked
+    assert masking._mask_surnames("Love it, and Cash Flow looks fine") == "Love it, and Cash Flow looks fine"
+    assert masking._mask_surnames("skilling is a skill") == "skilling is a skill"
+    assert "Love" not in masking._mask_surnames("Mr. Love replied")
+    load_names([])
+
+
+def test_names_in_greetings_are_hidden():
+    load_names(["Michelle Cash", "Mary Cook"])
+    for text in ("Michelle,\n\nAs discussed", "Hi Michelle, thanks", "Dear Mary:", '"body": "Michelle,\\n\\nAs discussed"'):
+        masked = masking._mask_greetings(text)
+        assert "Michelle" not in masked and "Mary" not in masked, text
+    load_names([])
+
+
+def test_first_names_after_a_person_word_are_hidden_but_not_everywhere():
+    load_names(["Michelle Rae", "Mark Taylor"], active=["Michelle Rae", "Mark Taylor"])
+    assert "Michelle" not in masking._mask_greetings("I spoke with Michelle last night")
+    assert masking._mask_greetings("Mark to market changed") == "Mark to market changed"
+    assert masking._mask_greetings("We sold gas to Dynegy") == "We sold gas to Dynegy"
+    load_names([])
+
+
+def test_ordinary_openers_are_not_taken_for_names():
+    load_names(["Michelle Cash"])
+    for text in ("Thanks,\nThe team", "Team,\nPlease read", "Meeting: Monday"):
+        assert masking._mask_greetings(text) == text
+    load_names([])
+
+
+def test_surnames_of_inactive_people_are_not_masked_alone():
+    load_names(["Jane Portland"], active=[])
+    assert masking._mask_surnames("Flights to Portland") == "Flights to Portland"
+    load_names([])
+
+
+def test_a_name_in_the_answer_also_hides_its_parts(people):
+    masked = scrub("David Oxley replied. David said Oxley agreed.")
+    assert "David" not in masked and "Oxley" not in masked
+
+
+def test_names_given_for_this_answer_hide_their_parts_too():
+    assert "Rosalee" not in masking._mask_name_parts("Rosalee replied", {"Rosalee Fleming"})
+
+
+def test_people_in_finds_listed_names(people):
+    assert masking.people_in("Show David Oxley emails", "from Kenneth L. Lay") == {"David Oxley", "Kenneth L Lay"}
+
+
 def test_first_names_the_graph_does_not_hold_are_found_by_spacy():
     if masking.nlp() is None:
         pytest.skip("spaCy model not installed")
@@ -126,6 +179,30 @@ def test_theme_ids_cannot_leak_a_name(people):
              "edges": [{"source": "__results__", "target": "theme:Kenneth Lay Stock", "type": "FOUND"}]}
     masked = mask_graph(graph)
     assert "Lay" not in str(masked)
+
+
+# ── Retrieved records ────────────────────────────────────────────────────────
+def test_records_are_shaped_for_the_list():
+    from app.rag.records import build_records
+    rows = [{"emailId": "enron_1", "sender": "Kay Mann", "subject": "Board", "body": "Hello", "sent_on": "2001-02-03T04:05:06",
+             "sensitivity": ["HR"], "score": 0.8, "embedding": [1.0]},
+            {"name": "Jeff Dasovich", "emails": 57}]
+    first, second = build_records(rows, 10)
+    assert first == {"title": "Board", "date": "2001-02-03", "fields": [{"name": "sender", "value": "Kay Mann"}],
+                     "snippet": "Hello", "labels": ["HR"]}
+    assert second["title"] == "Jeff Dasovich" and second["fields"] == [{"name": "emails", "value": "57"}]
+
+
+def test_masked_records_leak_nothing(people):
+    from app.rag.records import build_records
+    rows = [{"sender": "David Oxley", "subject": "David Oxley retention", "body": "David Oxley gets $40,000"}]
+    records = build_records(rows, 10, scrub)
+    assert "Oxley" not in str(records) and "40,000" not in str(records)
+
+
+def test_records_respect_the_policy_limit():
+    from app.rag.records import build_records
+    assert len(build_records([{"subject": str(i)} for i in range(9)], 4)) == 4
 
 
 # ── Money and the report ─────────────────────────────────────────────────────
@@ -149,6 +226,10 @@ def test_small_counts_are_hidden_and_masked_counts_are_rounded():
     rows = [{"name": "A B", "emails": 3, "sent_count": 293, "year": 2001, "score": 1, "is_core": True}]
     assert safe_counts(rows, False) == [{"name": "A B", "emails": "fewer than 5", "sent_count": 293, "year": 2001, "score": 1, "is_core": True}]
     assert safe_counts(rows, True)[0]["sent_count"] == "approximately 300"
+
+
+def test_masked_small_counts_never_round_to_zero():
+    assert safe_counts([{"sent": 5}], True) == [{"sent": "approximately 10"}]
 
 
 def test_nested_counts_are_made_safe():

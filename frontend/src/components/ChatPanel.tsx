@@ -3,7 +3,8 @@ import { useChat, type Message, type PendingAnswer } from '../contexts/ChatConte
 import { Send, Loader2, ShieldBan, Database, Network, ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
 import { FormattedText } from './FormattedText';
-import { ModeBadge, SensitivityBadges, explainSignals } from './ModeBadge';
+import { SensitivityBadges, explainSignals } from './ModeBadge';
+import { RetrievedRecords, SecurityCard } from './AnswerSecurity';
 
 const INPUT_MAX_HEIGHT = 150;
 
@@ -30,33 +31,17 @@ const QUICK_START_QUERIES = [
   'What emails did he send?',
 ];
 
-// "3 names, 1 email": counts only, read from the placeholders in the masked text.
-function hiddenSummary(hidden: Record<string, number> = {}) {
-  const singular: Record<string, string> = { names: 'name', emails: 'email', phones: 'phone number', ids: 'ID number', amounts: 'amount' };
-  return Object.entries(hidden)
-    .filter(([, n]) => n > 0)
-    .map(([kind, n]) => (n === 1 ? `1 ${singular[kind] ?? kind}` : `${n} ${kind === 'phones' ? 'phone numbers' : kind === 'ids' ? 'ID numbers' : kind}`))
-    .join(', ');
-}
-
 function AgentMeta({ msg }: { msg: Message }) {
   const { setActiveGraphData, activeGraphData } = useChat();
   const t = msg.telemetry;
   if (!t) return null;
   const showing = activeGraphData === msg.graph_data;
-  const hidden = hiddenSummary(t.exposure?.hidden);
-  const quarantined = t.exposure?.quarantined ?? 0;
 
   return (
     <div className="mt-3 border-t border-slate-800 pt-3">
-      {(hidden || quarantined > 0) && (
-        <p className="mb-2 text-xs text-amber-400">
-          {hidden && <>Hidden in this answer: {hidden}. </>}
-          {quarantined > 0 && <>{quarantined} retrieved email{quarantined === 1 ? ' was' : 's were'} withheld because the text looked like an attack.</>}
-        </p>
-      )}
+      <SecurityCard telemetry={t} />
+      <RetrievedRecords records={msg.records ?? []} masked={t.response_mode === 'MASK'} />
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-        <ModeBadge mode={t.response_mode} />
         <span className="inline-flex items-center gap-1 rounded border border-slate-800 px-2 py-0.5 font-mono" title="Records retrieved from the knowledge graph">
           <Database className="h-3 w-3" /> {t.result_count} records
         </span>

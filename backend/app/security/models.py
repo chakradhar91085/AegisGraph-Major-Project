@@ -45,6 +45,8 @@ class TelemetryEvent(BaseModel):
     user_id: Optional[str] = None
     user_email: Optional[str] = None
     response_mode: ResponseMode = ResponseMode.ALLOW
+    # Why a rule set the minimum risk, if one did; safe to show (it names no data).
+    reason: Optional[str] = None
     # Cypher the MCP agent ran. Audit only: stripped from the chat response,
     # since it can name people the user is not allowed to see unmasked.
     cypher_queries: List[str] = Field(default_factory=list)

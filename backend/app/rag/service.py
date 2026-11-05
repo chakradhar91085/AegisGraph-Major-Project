@@ -11,13 +11,14 @@ import time
 from app.retrieval.schemas import RetrievalRequest, RetrievalResponse, RetrievalIntent
 from app.retrieval import mcp_agent
 from app.rag.context_builder import build_context
+from app.rag.records import build_records
 from app.llm.ollama_provider import stream_answer
 from app.security.service import aegis_security
 from app.security.audit import audit_logger
 from app.security.models import ResponseMode
 from app.core.config import settings
 from app.security.gates import is_count_question
-from app.security.masking import ensure_names, hidden_counts, mask_graph, names_from_text, names_from_records, scrub
+from app.security.masking import ensure_names, hidden_counts, mask_graph, names_from_text, names_from_records, people_in, scrub
 from app.security.session import session_store
 from app.retrieval.graph_extractor import extract_graph
 
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 _PRONOUN = re.compile(r"\b(he|she|him|her|his|hers|they|them|their)\b", re.IGNORECASE)
 
 
-def _reply(answer: str, response: RetrievalResponse, status: str, telemetry, graph_data: dict | None = None) -> dict:
+def _reply(answer: str, response: RetrievalResponse, status: str, telemetry, graph_data: dict | None = None,
+           records: list[dict] | None = None) -> dict:
     return {
         "answer": answer,
         "intent": response.intent,
@@ -38,6 +40,7 @@ def _reply(answer: str, response: RetrievalResponse, status: str, telemetry, gra
         },
         "telemetry": telemetry.model_dump(),
         "graph_data": graph_data,
+        "records": records or [],
     }
 
 
@@ -130,8 +133,12 @@ class GraphRAGService:
         mask = telemetry_event.response_mode == ResponseMode.MASK
         names = set()
         if mask:
-            names = names_from_text(context_str, query) | names_from_records(retrieval_response.results)
+            names = names_from_text(context_str, query) | names_from_records(retrieval_response.results) | people_in(query, context_str)
             context_str = scrub(context_str, names)
+
+        def build_records_list() -> list[dict]:
+            return build_records(retrieval_response.results, policy.effective_context_limit,
+                                 (lambda text: scrub(text, names)) if mask else (lambda text: text))
 
         def build_graph_data() -> dict:
             graph = extract_graph(retrieval_response).model_dump()
@@ -176,7 +183,7 @@ class GraphRAGService:
             logger.error(f"Answer model unavailable: {e}")
             await audit_logger.log_event_async(telemetry_event.model_dump())
             return _reply("The language model is currently unavailable. Please try again shortly.",
-                          retrieval_response, "error", telemetry_event, build_graph_data())
+                          retrieval_response, "error", telemetry_event, build_graph_data(), build_records_list())
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
             await audit_logger.log_event_async(telemetry_event.model_dump())
@@ -186,14 +193,14 @@ class GraphRAGService:
                 "AegisGraph was unable to generate a natural language summary. However, here is the raw evidence retrieved securely from the knowledge graph:\n\n"
                 f"```markdown\n{context_str}\n```\n"
             )
-            return _reply(fallback_answer, retrieval_response, "error", telemetry_event, build_graph_data())
+            return _reply(fallback_answer, retrieval_response, "error", telemetry_event, build_graph_data(), build_records_list())
 
         # ── 6. Final masking, audit, response ──
         if mask:
             answer = scrub(answer, names)
             telemetry_event.exposure["hidden"] = hidden_counts(context_str, answer)
         await audit_logger.log_event_async(telemetry_event.model_dump())
-        return _reply(answer, retrieval_response, "success", telemetry_event, build_graph_data())
+        return _reply(answer, retrieval_response, "success", telemetry_event, build_graph_data(), build_records_list())
 
 
 # Module-level singleton
