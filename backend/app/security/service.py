@@ -7,7 +7,7 @@ from app.security.embeddings import embedding_provider
 from app.security.signals import signals_calculator
 from app.security.risk import risk_engine
 from app.security.policy import policy_engine
-from app.security.gates import gate_score
+from app.security.gates import gate_check
 from app.security.alerts import notify
 from app.security import exposure
 from app.security.audit import SEVERITY_ORDER
@@ -54,7 +54,7 @@ class AegisSecurityService:
 
         # Adaptive policy uses the smoothed risk BEFORE this query, raised to
         # the hard-gate floor if this query itself is an obvious attack.
-        gate = gate_score(query)
+        gate, gate_reason = gate_check(query)
         current_policy = policy_engine.calculate_policy(max(state.last_smoothed_risk, gate), role)
 
         return {
@@ -63,6 +63,7 @@ class AegisSecurityService:
             "user_id": user_id,
             "user_email": user_email,
             "gate": gate,
+            "gate_reason": gate_reason,
             "query": query,
             "role": role,
             "timestamp": current_time,
@@ -122,6 +123,10 @@ class AegisSecurityService:
         # EWMA Smoothing (a hard gate is a floor the smoothed score cannot dip below)
         prev_smoothed = state.last_smoothed_risk
         smoothed_risk = max(risk_engine.calculate_ewma(instantaneous_risk, prev_smoothed), gate)
+
+        # Sensitive data already handed over keeps counting however long the user waits.
+        session_store.add_ratchet(risk_key, answer_exposure.get("sensitive_units", 0.0), current_time)
+        smoothed_risk = max(smoothed_risk, session_store.ratchet_floor(risk_key, current_time))
         
         # Persist to Session Store
         record = QueryRecord(
@@ -132,8 +137,11 @@ class AegisSecurityService:
         )
         session_store.add_query_record(risk_key, record)
         session_store.update_smoothed_risk(risk_key, smoothed_risk)
-        retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "error")
+        retrieval_executed = retrieval_response.strategy not in ("blocked_by_policy", "error", "count_limit")
 
+        quarantined = retrieval_response.metadata.get("quarantined", 0)
+        if quarantined:
+            answer_exposure = {**answer_exposure, "quarantined": quarantined}
         self._alert_admin(ctx, state, smoothed_risk, answer_exposure)
 
         # Return Telemetry
@@ -168,10 +176,10 @@ class AegisSecurityService:
         state.last_mode = mode
 
         events = []
-        if ctx["gate"] >= 0.65:
-            events.append("Prompt-injection / privilege-escalation attempt detected")
-        elif ctx["gate"] > 0:
-            events.append("Bulk request for sensitive personal data detected")
+        if ctx["gate"] > 0:
+            events.append(ctx.get("gate_reason") or "Prompt-injection / privilege-escalation attempt detected")
+        if answer_exposure and answer_exposure.get("quarantined"):
+            events.append(f"Withheld {answer_exposure['quarantined']} retrieved email(s) containing text that looks like an attack")
         if escalated and mode == "BLOCK":
             events.append("Risk reached HIGH: this user's queries are now BLOCKED")
         elif escalated and mode == "MASK":

@@ -98,6 +98,14 @@ class Settings(BaseSettings):
     # (one unit = one fully sensitive email about a top executive).
     SECURITY_SENSITIVITY_HALF_LIFE_SECONDS: float = 900.0
     SECURITY_SENSITIVITY_SCALE: float = 3.0
+    # Sensitive data a user may receive before risk is floored at Block: Mask starts at 35% of
+    # this, Block at 65%. Roughly 15 and 30 sensitive emails for ordinary senders.
+    # ponytail: hand-set; calibrate with labelled sessions. Lost on restart, like all risk memory.
+    SECURITY_RATCHET_BUDGET: float = 20.0
+    SECURITY_RATCHET_WINDOW_SECONDS: int = 86400
+    # "How many" questions a user may ask per window.
+    SECURITY_COUNT_BUDGET: int = 10
+    SECURITY_COUNT_WINDOW_SECONDS: int = 3600
     
     # Risk rises quickly and falls slowly, so innocent queries cannot hide probing.
     SECURITY_EWMA_RISE: float = 0.6

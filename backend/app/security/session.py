@@ -48,7 +48,25 @@ class SessionStore:
         if not state.last_seen:
             return state.last_smoothed_risk
         idle = now - state.last_seen
-        return state.last_smoothed_risk * 0.5 ** (idle / settings.SECURITY_RISK_HALF_LIFE_SECONDS)
+        decayed = state.last_smoothed_risk * 0.5 ** (idle / settings.SECURITY_RISK_HALF_LIFE_SECONDS)
+        return max(decayed, self.ratchet_floor(session_id, now))
+
+    def ratchet_floor(self, session_id: str, now: float) -> float:
+        """Risk can never fade below the share of the budget this user has already used.
+        The window ends the count eventually, so an honest user is not locked out for good."""
+        state = self.get_or_create_session(session_id)
+        if state.ratchet and now - state.ratchet_start > settings.SECURITY_RATCHET_WINDOW_SECONDS:
+            state.ratchet = 0.0
+        return min(1.0, state.ratchet / settings.SECURITY_RATCHET_BUDGET)
+
+    def add_ratchet(self, session_id: str, units: float, now: float):
+        if units <= 0:
+            return
+        state = self.get_or_create_session(session_id)
+        self.ratchet_floor(session_id, now)  # applies the window first
+        if not state.ratchet:
+            state.ratchet_start = now
+        state.ratchet += units
 
     def update_smoothed_risk(self, session_id: str, risk: float):
         state = self.get_or_create_session(session_id)

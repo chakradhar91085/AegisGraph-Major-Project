@@ -45,6 +45,8 @@ export interface Exposure {
   max_seniority?: number;
   labels?: Record<string, number>;
   pii?: Record<string, number>;
+  hidden?: Record<string, number>; // MASK mode: how much was hidden, e.g. {names: 3}
+  quarantined?: number; // retrieved emails withheld because they looked like an attack
 }
 
 export interface TelemetryEvent {

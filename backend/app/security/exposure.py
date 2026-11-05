@@ -57,10 +57,13 @@ async def measure(results: list[dict]) -> dict:
         return {}
 
     labels, pii = Counter(), Counter()
-    units, sensitive, top = 0.0, 0, 0.0
+    units, sensitive_units, sensitive, top = 0.0, 0.0, 0, 0.0
     for e in emails:
-        units += e["score"] * (0.5 + 0.5 * e["seniority"])
-        sensitive += e["score"] >= SENSITIVE_SCORE  # a phone number alone (0.3) is not "sensitive"
+        cost = e["score"] * (0.5 + 0.5 * e["seniority"])
+        units += cost
+        if e["score"] >= SENSITIVE_SCORE:  # a phone number alone (0.3) is not "sensitive"
+            sensitive += 1
+            sensitive_units += cost
         top = max(top, e["seniority"])
         labels.update(e["labels"])
         pii.update(e["pii"])
@@ -70,7 +73,7 @@ async def measure(results: list[dict]) -> dict:
             top = max(top, p["seniority"])
     else:
         top = max([top] + [p["seniority"] for p in persons])
-    return {"units": round(units, 3), "sensitive_items": int(sensitive), "items": len(emails) or len(persons),
+    return {"units": round(units, 3), "sensitive_units": round(sensitive_units, 3), "sensitive_items": int(sensitive), "items": len(emails) or len(persons),
             "max_seniority": round(top, 2), "labels": dict(labels), "pii": dict(pii)}
 
 

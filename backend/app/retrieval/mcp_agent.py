@@ -27,7 +27,8 @@ from app.core.config import settings
 from app.db.neo4j import neo4j_client
 from app.retrieval.schemas import RetrievalRequest, RetrievalResponse, RetrievalIntent
 from app.security.embeddings import embedding_provider
-from app.security.masking import mask_text, names_from_text, names_from_records
+from app.security.gates import quarantine
+from app.security.masking import safe_counts, scrub, names_from_text, names_from_records
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +240,7 @@ async def _chat(messages: list[dict]) -> dict:
         return r.json()["choices"][0]["message"]
 
 
-async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str:
+async def _run_tool(call: dict, limit: int, batches: list, cyphers: list, withheld: list, mask: bool) -> str:
     name = call["function"]["name"]
     try:
         args = json.loads(call["function"].get("arguments") or "{}")
@@ -266,7 +267,10 @@ async def _run_tool(call: dict, limit: int, batches: list, cyphers: list) -> str
     except Exception as e:
         logger.info(f"Agent tool {name} failed: {e}")
         return f"ERROR: {e}"
-    rows = rows[:limit]
+    # Before any model reads them: emails that look like attacks go, counts get made safe.
+    rows, poisoned = quarantine(rows[:limit])
+    withheld.append(poisoned)
+    rows = safe_counts(rows, mask)
     if rows:
         batches.append(rows)
     return json.dumps(rows, default=str)
@@ -283,6 +287,7 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
     messages = [{"role": "system", "content": system}, {"role": "user", "content": request.query}]
     batches: list[list[dict]] = []
     cyphers: list[str] = []
+    withheld: list[int] = []
 
     for _ in range(settings.AGENT_MAX_STEPS):
         msg = await _chat(messages)
@@ -292,11 +297,11 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
         messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
         failed = False
         for call in calls:
-            output = await _run_tool(call, limit, batches, cyphers)
+            output = await _run_tool(call, limit, batches, cyphers, withheld, mask)
             failed |= output.startswith("ERROR") or output == "[]"
             if mask:  # MASK mode: the hosted model never sees real names or addresses either
                 seen = names_from_records(row for batch in batches for row in batch)
-                output = mask_text(output, names_from_text(output) | seen)
+                output = scrub(output, names_from_text(output) | seen)
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": output[:6000]})
         if batches and not failed:
             break  # got rows: skip the extra "are we done?" model call (~5-10 s)
@@ -321,5 +326,5 @@ async def retrieve(request: RetrievalRequest) -> RetrievalResponse:
         results=results,
         result_count=len(results),
         strategy="mcp_agent",
-        metadata={"cypher": cyphers, "agent_model": settings.AGENT_MODEL},
+        metadata={"cypher": cyphers, "agent_model": settings.AGENT_MODEL, "quarantined": sum(withheld)},
     )

@@ -12,6 +12,10 @@ asyncpg==0.32.0
 PyJWT==2.15.1
 cryptography==50.0.2  # PyJWT needs it to verify Clerk's RS256 tokens
 
+# Finds person names in MASK mode (with the graph's own name list)
+spacy==3.8.18
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
 # Neo4j MCP server used by the retrieval agent (app/retrieval/mcp_agent.py); pulls in the mcp client SDK.
 mcp-neo4j-cypher==0.6.0
 

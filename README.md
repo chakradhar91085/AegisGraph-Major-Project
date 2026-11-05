@@ -13,6 +13,7 @@ Traditional RAG systems let users query the underlying data freely, which makes 
 - **Retrieval agent**: an NVIDIA-hosted model writes read-only Cypher through the Neo4j MCP server
 - **Answer model**: Ollama running `llama3.1:8b`, fully local
 - **Embeddings**: SentenceTransformers (`all-MiniLM-L6-v2`) for the behavioral signals
+- **Security evaluation**: from `backend/`, run `venv/Scripts/python.exe scripts/evaluate.py`. It scores the gate on 80 harmless questions, 33 development attacks and 51 frozen held-out attacks (`tests/fixtures`), then replays scripted sessions. Never edit the held-out set to raise its score.
 - **Admin alerts**: Telegram and/or email
 
 See [`backend/docs/AegisGraph_Technical_Architecture.md`](backend/docs/AegisGraph_Technical_Architecture.md) for the full architecture.

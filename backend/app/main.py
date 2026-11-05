@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.db.postgres import init_db
 from app.llm.ollama_provider import KEEP_ALIVE
 from app.retrieval import mcp_agent
+from app.security import masking
 from app.security.embeddings import embedding_provider
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,8 @@ async def _warm_up() -> None:
                               json={"model": settings.OLLAMA_MODEL, "keep_alive": KEEP_ALIVE})
 
     jobs = [("Ollama model", ollama()), ("embedding model", embedding_provider.get_embedding("warm up")),
-            ("Neo4j MCP server", mcp_agent.neo4j_mcp.schema())]
+            ("Neo4j MCP server", mcp_agent.neo4j_mcp.schema()), ("masking name list", masking.ensure_names()),
+            ("spaCy", asyncio.to_thread(masking.nlp))]
     for (name, _), result in zip(jobs, await asyncio.gather(*(j for _, j in jobs), return_exceptions=True)):
         logger.info(f"Warm-up {name}: {'failed: ' + repr(result) if isinstance(result, Exception) else 'ready'}")
 

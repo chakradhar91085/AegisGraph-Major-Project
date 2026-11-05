@@ -71,3 +71,8 @@ class SessionState(BaseModel):
     # Accumulated sensitivity exposure and when it was last updated (it fades over time).
     exposure: float = 0.0
     exposure_at: float = 0.0
+    # Sensitive data handed over so far. Unlike `exposure`, this does not fade inside its window.
+    ratchet: float = 0.0
+    ratchet_start: float = 0.0
+    # When recent "how many" questions were asked, for the per-user count budget.
+    count_questions: List[float] = Field(default_factory=list)
