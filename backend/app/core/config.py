@@ -58,30 +58,40 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     ALERT_EMAIL_TO: str = ""
+    # Slack incoming-webhook URL (secret: anyone holding it can post to the channel).
+    SLACK_WEBHOOK_URL: str = ""
 
     # Security & Telemetry Settings
     # Server-only secret used to sign session tickets (required: set in .env).
     SECURITY_SESSION_SECRET: str
     # A user's remembered risk halves after this many idle seconds.
-    SECURITY_RISK_HALF_LIFE_SECONDS: float = 300.0
+    SECURITY_RISK_HALF_LIFE_SECONDS: float = 900.0
 
     # Research-aligned semantic drift model
     SECURITY_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     # Number of recent queries (including the current one) considered when
     # computing the semantic-focus signal (paper Eq. 1's sliding window W).
     SECURITY_SEMANTIC_WINDOW_SIZE: int = 5
-    SECURITY_TEMPORAL_WINDOW_SECONDS: int = 60
-    SECURITY_ALPHA_TEMP: float = 0.05
+    # Queries further back than this no longer count towards behaviour signals.
+    SECURITY_TEMPORAL_WINDOW_SECONDS: int = 900
+    # Cosine similarity at or below FLOOR is unrelated (0); at or above CEIL it is repetition (1).
+    SECURITY_SEMANTIC_FLOOR: float = 0.3
+    SECURITY_SEMANTIC_CEIL: float = 0.8
+    # Earlier queries inside RATE_WINDOW; RATE_MAX of them gives a full rate signal.
+    SECURITY_RATE_WINDOW_SECONDS: int = 300
+    SECURITY_RATE_MAX: int = 20
+    # This many separate queries touching one person gives full entity focus.
+    SECURITY_ENTITY_MAX_QUERIES: int = 5
     SECURITY_GRAPH_MAX_DEPTH: int = 5
     SECURITY_GRAPH_MAX_NODES: int = 50
-    SECURITY_GRAPH_WEIGHT: float = 0.5
-    
-    # Risk Fusion Weights (alpha, beta, gamma, delta, epsilon)
-    SECURITY_WEIGHT_SEMANTIC: float = 0.2
-    SECURITY_WEIGHT_TEMPORAL: float = 0.2
-    SECURITY_WEIGHT_ENTITY: float = 0.2
-    SECURITY_WEIGHT_GRAPH: float = 0.2
-    SECURITY_WEIGHT_SENSITIVITY: float = 0.2
+
+    # How far each signal alone can push risk (0-1), combined by noisy-OR in risk.py.
+    # ponytail: hand-set; fit these on a labelled session set once one exists.
+    SECURITY_WEIGHT_SEMANTIC: float = 0.35
+    SECURITY_WEIGHT_TEMPORAL: float = 0.35
+    SECURITY_WEIGHT_ENTITY: float = 0.45
+    SECURITY_WEIGHT_GRAPH: float = 0.35
+    SECURITY_WEIGHT_SENSITIVITY: float = 0.60
 
     # Sensitivity exposure (5th signal): sensitive data a user has pulled, fading with
     # this half-life; the signal reaches ~63% once SCALE units have been pulled
@@ -89,7 +99,9 @@ class Settings(BaseSettings):
     SECURITY_SENSITIVITY_HALF_LIFE_SECONDS: float = 900.0
     SECURITY_SENSITIVITY_SCALE: float = 3.0
     
-    SECURITY_EWMA_LAMBDA: float = 0.4
+    # Risk rises quickly and falls slowly, so innocent queries cannot hide probing.
+    SECURITY_EWMA_RISE: float = 0.6
+    SECURITY_EWMA_FALL: float = 0.2
     
     # Adaptive Response Policy Parameters
     SECURITY_THETA_MID: float = 0.55

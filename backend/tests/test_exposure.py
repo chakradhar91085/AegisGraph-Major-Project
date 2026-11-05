@@ -24,4 +24,4 @@ def test_signal_saturates():
 def test_exposure_raises_risk_alone():
     quiet = risk_engine.calculate_instantaneous_risk(SignalValues())
     exposed = risk_engine.calculate_instantaneous_risk(SignalValues(sensitivity_exposure=1.0))
-    assert quiet == 0.0 and abs(exposed - 0.2) < 1e-9
+    assert quiet == 0.0 and abs(exposed - 0.6) < 1e-9

@@ -13,6 +13,15 @@ def _ctx(mode: ResponseMode, gate: float = 0.0) -> dict:
             "session_id": "abcdef123456", "query": "who is ken lay", "timestamp": time.time()}
 
 
+def test_slack_is_a_channel_and_only_block_pings_everyone(monkeypatch):
+    from app.core.config import settings
+    from app.security import alerts
+    monkeypatch.setattr(settings, "SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/x")
+    assert "slack" in alerts.configured_channels()
+    assert alerts.slack_text("AegisGraph BLOCK alert", "body").startswith("<!channel> *AegisGraph BLOCK alert*")
+    assert "<!channel>" not in alerts.slack_text("AegisGraph security alert", "body")
+
+
 def test_alerts_fire_on_escalation_and_gates_only(monkeypatch):
     sent = []
     monkeypatch.setattr(service, "notify", lambda subject, text: sent.append((subject, text)))

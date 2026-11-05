@@ -24,12 +24,15 @@ def names_from_text(*texts: str) -> set[str]:
 
 
 def names_from_records(rows) -> set[str]:
-    """Person names stored in result rows, e.g. {'sender_name': 'Kenneth L. Lay'}."""
+    """Person names stored in result rows, e.g. {'sender_name': 'Kenneth L. Lay'}, also inside nested lists/maps."""
     names = set()
     for row in rows:
         for key, value in row.items():
-            if "name" in key.lower() and isinstance(value, str) and "@" not in value and len(value.split()) >= 2:
-                names.add(value)
+            for v in value if isinstance(value, list) else [value]:
+                if isinstance(v, dict):
+                    names |= names_from_records([v])
+                elif "name" in key.lower() and isinstance(v, str) and "@" not in v and len(v.split()) >= 2:
+                    names.add(v)
     return names
 
 
@@ -49,7 +52,10 @@ def mask_graph(graph: dict, names=()) -> dict:
     """Pseudonymize Person nodes consistently and scrub other labels."""
     person_ids: dict[str, str] = {}
     nodes = []
-    for node in graph.get("nodes", []):
+    for raw in graph.get("nodes", []):
+        # Only counts, scores and sensitivity tags survive; any free text could hold a name.
+        details = {k: v for k, v in raw.get("details", {}).items() if isinstance(v, (int, float)) or k.lower() == "sensitivity"}
+        node = {**raw, "details": details}
         if node["type"] == "Person":
             new_id = person_ids.setdefault(node["id"], f"person-{len(person_ids) + 1}")
             nodes.append({**node, "id": new_id, "label": new_id.replace("-", " ").title()})

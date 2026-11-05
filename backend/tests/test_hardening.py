@@ -40,7 +40,7 @@ def test_graph_masking_pseudonymizes_people_consistently():
         "edges": [{"source": "a@enron.com", "target": "e1", "type": "SENT"}],
     }
     masked = mask_graph(graph)
-    assert masked["nodes"][0] == {"id": "person-1", "label": "Person 1", "type": "Person"}
+    assert masked["nodes"][0] == {"id": "person-1", "label": "Person 1", "type": "Person", "details": {}}
     assert "b@enron.com" not in masked["nodes"][1]["label"]
     assert masked["edges"][0]["source"] == "person-1"
 
@@ -64,7 +64,7 @@ async def test_new_session_does_not_reset_a_users_risk():
 async def test_risk_decays_while_idle():
     state = session_store.get_or_create_session("u-idle")
     state.last_smoothed_risk = 0.8
-    state.last_seen = time.time() - 300  # one half-life ago
+    state.last_seen = time.time() - 900  # one half-life ago
     ctx = await _observe("s-idle", "Who is Kay Mann?", "u-idle")
     assert 0.35 < ctx["policy"].risk_score < 0.45
 

@@ -59,5 +59,5 @@ python -m pytest tests
 Point `DATABASE_URL` at a scratch database first, so test runs stay out of the real audit trail.
 
 ### Optional settings (`backend/.env`)
-- **Admin alerts**: fill in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, and/or `SMTP_USER`, `SMTP_PASSWORD` (a Gmail App Password) and `ALERT_EMAIL_TO`. Use "Send test alert" on the admin Settings page to check them.
+- **Admin alerts**: fill in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, and/or `SMTP_USER`, `SMTP_PASSWORD` (a Gmail App Password) and `ALERT_EMAIL_TO`, and/or `SLACK_WEBHOOK_URL` (a Slack incoming webhook; BLOCK alerts ping `@channel`). Use "Send test alert" on the admin Settings page to check them.
 - **Emails in the audit log**: in the Clerk dashboard, add `{"email": "{{user.primary_email_address}}"}` under Sessions → Customize session token.

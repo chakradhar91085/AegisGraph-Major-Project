@@ -88,10 +88,7 @@ class AegisSecurityService:
         state = session_store.get_or_create_session(risk_key)
         history = [q for q in state.history if q.timestamp >= (current_time - settings.SECURITY_TEMPORAL_WINDOW_SECONDS)]
 
-        # Temporal frequency: exponential decay on the gap since the last
-        # query (paper Eq. 2), not a count over the window.
-        prev_timestamp = state.history[-1].timestamp if state.history else None
-        temporal_frequency = signals_calculator.calculate_temporal_frequency(prev_timestamp, current_time)
+        temporal_frequency = signals_calculator.calculate_temporal_frequency(history, current_time)
 
         # Calculate Entity Focus (including current query's entities)
         # Create a temporary history list adding the current record

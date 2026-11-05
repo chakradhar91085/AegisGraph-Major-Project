@@ -1,5 +1,5 @@
 """
-AegisGraph — admin security alerts over Telegram and email.
+AegisGraph — admin security alerts over Telegram, email and Slack.
 
 A channel stays silent until its settings are filled in (see config.py).
 Pipeline alerts are fire-and-forget so a slow Telegram or SMTP server never
@@ -25,7 +25,20 @@ def configured_channels() -> list[str]:
         channels.append("telegram")
     if settings.SMTP_USER and settings.SMTP_PASSWORD and settings.ALERT_EMAIL_TO:
         channels.append("email")
+    if settings.SLACK_WEBHOOK_URL:
+        channels.append("slack")
     return channels
+
+
+def slack_text(subject: str, text: str) -> str:
+    """Slack message; a BLOCK alert also pings the whole channel (phones included)."""
+    return f"{'<!channel> ' if 'BLOCK' in subject else ''}*{subject}*\n{text}"
+
+
+async def _send_slack(subject: str, text: str) -> None:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(settings.SLACK_WEBHOOK_URL, json={"text": slack_text(subject, text)})
+        response.raise_for_status()
 
 
 async def _send_telegram(text: str) -> None:
@@ -54,6 +67,7 @@ async def send_alert(subject: str, text: str) -> dict[str, str]:
     senders = {
         "telegram": lambda: _send_telegram(f"{subject}\n\n{text}"),
         "email": lambda: asyncio.to_thread(_send_email_blocking, subject, text),
+        "slack": lambda: _send_slack(subject, text),
     }
     results = {}
     for channel in configured_channels():
@@ -61,8 +75,11 @@ async def send_alert(subject: str, text: str) -> dict[str, str]:
             await senders[channel]()
             results[channel] = "sent"
         except Exception as e:
-            # Telegram errors echo the request URL, which contains the bot token.
-            detail = str(e).replace(settings.TELEGRAM_BOT_TOKEN, "***") if settings.TELEGRAM_BOT_TOKEN else str(e)
+            # Telegram and Slack errors echo the request URL, which contains the secret.
+            detail = str(e)
+            for secret in (settings.TELEGRAM_BOT_TOKEN, settings.SLACK_WEBHOOK_URL):
+                if secret:
+                    detail = detail.replace(secret, "***")
             logger.error(f"Security alert via {channel} failed: {detail}")
             results[channel] = f"failed: {detail}"
     return results
