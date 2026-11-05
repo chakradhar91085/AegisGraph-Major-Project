@@ -4,6 +4,16 @@ import { GraphVisualizer } from './GraphVisualizer';
 import type { GraphNode, GraphEdge } from './GraphVisualizer';
 import { Maximize2, Minimize2, Network, X } from 'lucide-react';
 
+// "sent_on" / "sentOn" -> "sent on"
+const fieldName = (key: string) => key.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+
+function fieldValue(value: string | number | boolean | (string | number)[]) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+  // Neo4j datetimes: keep the date
+  return /^\d{4}-\d{2}-\d{2}T/.test(String(value)) ? String(value).slice(0, 10) : String(value);
+}
+
 export function NetworkGraph() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerRef = useRef<GraphVisualizer | null>(null);
@@ -47,7 +57,7 @@ export function NetworkGraph() {
     : [];
 
   return (
-    <div className={`relative flex flex-col overflow-hidden bg-slate-950 ${isFullscreen ? 'fixed inset-4 z-50 rounded-lg border border-slate-700' : 'h-full w-full'}`}>
+    <div className={`flex flex-col overflow-hidden bg-slate-950 ${isFullscreen ? 'fixed inset-4 z-50 rounded-lg border border-slate-700' : 'relative h-full w-full'}`}>
       <button
         className="absolute right-3 top-3 z-10 rounded-md border border-slate-700 bg-slate-800 p-1.5 text-slate-300 hover:text-slate-50"
         onClick={() => setIsFullscreen(!isFullscreen)}
@@ -59,7 +69,7 @@ export function NetworkGraph() {
       <div className="relative h-full w-full flex-1">
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full outline-none" />
 
-        {!activeGraphData && (
+        {!activeGraphData?.nodes.length && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center">
             <div>
               <Network className="mx-auto mb-3 h-10 w-10 text-slate-700" />
@@ -69,7 +79,7 @@ export function NetworkGraph() {
           </div>
         )}
 
-        {activeGraphData && !selected && (
+        {!!activeGraphData?.nodes.length && !selected && (
           <div className="pointer-events-none absolute bottom-3 left-3 text-xs text-slate-500">Click a node for details · drag to move</div>
         )}
 
@@ -77,13 +87,23 @@ export function NetworkGraph() {
           <div className="absolute bottom-3 left-3 right-3 max-h-[45%] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 p-4 shadow-xl backdrop-blur sm:right-auto sm:w-80">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-xs font-mono uppercase tracking-wider text-blue-400">{selected.type}</div>
+                <div className="text-xs font-mono text-blue-400">{selected.type}</div>
                 <div className="break-words text-sm font-medium text-slate-50">{selected.label}</div>
               </div>
               <button onClick={() => setSelection(null)} className="p-0.5 text-slate-400 hover:text-slate-50" aria-label="Close details">
                 <X className="h-4 w-4" />
               </button>
             </div>
+            {Object.keys(selected.details ?? {}).length > 0 && (
+              <dl className="mb-3 space-y-1 border-b border-slate-800 pb-3 text-xs">
+                {Object.entries(selected.details ?? {}).map(([key, value]) => (
+                  <div key={key} className="flex gap-2">
+                    <dt className="w-24 shrink-0 text-slate-500">{fieldName(key)}</dt>
+                    <dd className="min-w-0 whitespace-pre-wrap break-words text-slate-200">{fieldValue(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             <div className="mb-1 text-xs text-slate-400">{links.length} connection{links.length === 1 ? '' : 's'}</div>
             <ul className="space-y-1 text-xs">
               {links.map((l, i) => (

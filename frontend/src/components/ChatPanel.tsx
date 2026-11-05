@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChat, type Message, type PendingAnswer } from '../contexts/ChatContext';
-import { Send, Loader2, ShieldBan, Database, Network, ArrowRight, MessagesSquare } from 'lucide-react';
+import { Send, Loader2, ShieldBan, Database, Network, ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
 import { FormattedText } from './FormattedText';
 import { ModeBadge, SensitivityBadges, explainSignals } from './ModeBadge';
@@ -55,7 +55,7 @@ function AgentMeta({ msg }: { msg: Message }) {
           </span>
         )}
         <SensitivityBadges exposure={t.exposure} />
-        {msg.graph_data && (
+        {!!msg.graph_data?.nodes.length && (
           <button
             onClick={() => setActiveGraphData(msg.graph_data!)}
             className={clsx(
@@ -110,12 +110,10 @@ export function ChatPanel({ messages, loading, pending, error, onSendMessage }: 
         <div className="mx-auto flex max-w-3xl flex-col gap-5">
           {messages.length === 0 && (
             <div className="flex flex-col items-center pt-[10vh] text-center">
-              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-lg border border-slate-800 bg-slate-900">
-                <MessagesSquare className="h-7 w-7 text-blue-500" />
-              </div>
-              <h2 className="mb-2 text-xl font-semibold text-slate-50">Ask the Enron knowledge graph</h2>
+              <h2 className="font-display mb-3 text-4xl text-slate-50">Ask the Enron files</h2>
               <p className="mb-8 max-w-md text-sm leading-relaxed text-slate-400">
-                Every question is checked for risky behaviour. If your pattern looks like data harvesting, names get masked and, at high risk, answers are blocked.
+                Each question is scored for risky behaviour. If your pattern looks like data harvesting, names are blacked out
+                (<span className="redaction">hidden</span>) and, at high risk, answers are blocked.
               </p>
               <div className="grid w-full max-w-md gap-2">
                 {QUICK_START_QUERIES.map((query) => (
@@ -137,7 +135,7 @@ export function ChatPanel({ messages, loading, pending, error, onSendMessage }: 
             const blocked = msg.telemetry?.blocked_by_policy;
             if (msg.sender === 'user') {
               return (
-                <div key={msg.id} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-50">
+                <div key={msg.id} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-lg rounded-br-sm bg-slate-50 px-4 py-3 text-sm text-slate-900">
                   {msg.text}
                 </div>
               );
@@ -145,14 +143,14 @@ export function ChatPanel({ messages, loading, pending, error, onSendMessage }: 
             return (
               <div
                 key={msg.id}
-                className={clsx('rounded-lg border px-4 py-3', blocked ? 'border-red-900/60 bg-red-950/20' : 'border-slate-800 bg-slate-900')}
+                className={clsx('rounded-lg border px-5 py-4', blocked ? 'border-red-900/60 bg-red-950/20' : 'border-slate-800 bg-slate-900')}
               >
                 {blocked && (
-                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-red-400">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-400">
                     <ShieldBan className="h-4 w-4" /> Blocked by security policy
                   </div>
                 )}
-                <div className={clsx('whitespace-pre-wrap text-sm leading-relaxed', blocked ? 'text-red-300' : 'text-slate-200')}>
+                <div className={clsx('memo whitespace-pre-wrap', blocked ? 'text-red-300' : 'text-slate-100')}>
                   <FormattedText text={msg.text} />
                 </div>
                 <AgentMeta msg={msg} />
@@ -164,9 +162,9 @@ export function ChatPanel({ messages, loading, pending, error, onSendMessage }: 
             // The answer as it is being written; replaced by the finished message (with
             // badges and policy details) when the server sends it.
             <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" aria-live="polite">
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+              <div className="memo whitespace-pre-wrap text-slate-100">
                 <FormattedText text={pending.text} />
-                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-500 align-middle" aria-hidden />
+                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-slate-50 align-middle" aria-hidden />
               </div>
             </div>
           ) : loading && (

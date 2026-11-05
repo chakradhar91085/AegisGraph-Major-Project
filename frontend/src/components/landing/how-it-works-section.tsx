@@ -45,10 +45,10 @@ export function HowItWorksSection() {
               key={step.num}
               className="bg-slate-900 border border-slate-800 p-6 rounded relative flex flex-col group hover:border-slate-700 transition-colors"
             >
-              <div className="font-mono text-xs text-slate-500 mb-4 tracking-widest">
+              <div className="font-mono text-xs text-slate-500 mb-4">
                 {step.num}
               </div>
-              <h3 className="font-sans font-semibold text-sm text-slate-200 mb-3 uppercase tracking-wide">
+              <h3 className="font-sans font-semibold text-sm text-slate-200 mb-3 tracking-wide">
                 {step.title}
               </h3>
               <p className="text-slate-400 text-sm leading-relaxed mt-auto">

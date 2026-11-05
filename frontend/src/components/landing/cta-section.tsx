@@ -22,7 +22,7 @@ export function CtaSection() {
           <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
             <SignedOut>
               <SignInButton mode="modal" forceRedirectUrl="/app">
-                <button className="inline-flex items-center justify-center gap-2 bg-blue-600 text-slate-50 font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm">
+                <button className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm">
                   Open AegisGraph
                 </button>
               </SignInButton>
@@ -30,7 +30,7 @@ export function CtaSection() {
             <SignedIn>
               <a
                 href="/app"
-                className="inline-flex items-center justify-center gap-2 bg-blue-600 text-slate-50 font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm"
+                className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm"
               >
                 Open AegisGraph
               </a>

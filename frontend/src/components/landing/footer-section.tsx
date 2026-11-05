@@ -18,7 +18,7 @@ export function FooterSection() {
                   <path d="M12 9l-3.5 5M12 9l3.5 5M8.5 14h7" strokeWidth="1" strokeDasharray="1 2" opacity="0.8" />
                 </svg>
               </div>
-              <span className="font-sans font-semibold text-lg tracking-widest text-slate-50">AEGISGRAPH</span>
+              <span className="font-sans font-semibold text-lg text-slate-50">AegisGraph</span>
             </div>
             <p className="text-slate-400 text-sm font-sans max-w-xs leading-relaxed">
               Behavioral Security for Graph-RAG.
@@ -27,7 +27,7 @@ export function FooterSection() {
 
           {/* Links Column 1: Platform */}
           <div className="md:col-span-3 lg:col-span-2 lg:col-start-8 flex flex-col gap-4">
-            <h4 className="font-sans font-semibold text-slate-200 text-sm tracking-widest uppercase">
+            <h4 className="font-sans font-semibold text-slate-200 text-sm">
               Platform
             </h4>
             <nav className="flex flex-col gap-3">
@@ -45,7 +45,7 @@ export function FooterSection() {
 
           {/* Links Column 2: Project */}
           <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-4">
-            <h4 className="font-sans font-semibold text-slate-200 text-sm tracking-widest uppercase">
+            <h4 className="font-sans font-semibold text-slate-200 text-sm">
               Project
             </h4>
             <nav className="flex flex-col gap-3">

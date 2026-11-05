@@ -69,6 +69,7 @@ export interface GraphNode {
   id: string;
   label: string;
   type: string;
+  details?: Record<string, string | number | boolean | (string | number)[]>;
 }
 
 export interface GraphEdge {

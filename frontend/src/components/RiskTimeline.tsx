@@ -10,7 +10,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const dataPoint = payload[0].payload;
     return (
-      <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg shadow-md text-xs font-mono uppercase tracking-widest text-slate-400">
+      <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg shadow-md text-xs font-mono text-slate-400">
         <p className="font-bold text-slate-50 mb-2 border-b border-slate-800 pb-1">{label}</p>
         <p className="text-amber-500 mb-1">EWMA Risk: {dataPoint.ewmaRisk}</p>
         <p className="text-blue-500">Instant Risk: {dataPoint.instantRisk}</p>
@@ -24,7 +24,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export function RiskTimeline({ history }: RiskTimelineProps) {
   if (!history || history.length === 0) {
     return (
-      <div className="h-48 w-full flex items-center justify-center text-slate-500 text-xs font-mono uppercase tracking-widest border border-slate-800 bg-slate-950 rounded-lg">
+      <div className="h-48 w-full flex items-center justify-center text-slate-500 text-xs font-mono border border-slate-800 bg-slate-950 rounded-lg">
         No telemetry history available
       </div>
     );
@@ -43,10 +43,10 @@ export function RiskTimeline({ history }: RiskTimelineProps) {
     <div className="h-56 w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#d6dbe0" vertical={false} />
           <XAxis 
             dataKey="query" 
-            stroke="#64748b" 
+            stroke="#76808a" 
             fontSize={10} 
             fontFamily='"IBM Plex Mono", monospace'
             tickMargin={8} 
@@ -55,35 +55,35 @@ export function RiskTimeline({ history }: RiskTimelineProps) {
           />
           <YAxis 
             domain={[0, 1]} 
-            stroke="#64748b" 
+            stroke="#76808a" 
             fontSize={10} 
             fontFamily='"IBM Plex Mono", monospace'
             tickFormatter={(val) => val.toFixed(1)} 
             axisLine={false} 
             tickLine={false}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#1e293b', strokeWidth: 1, strokeDasharray: '4 4' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#d6dbe0', strokeWidth: 1, strokeDasharray: '4 4' }} />
           
           {/* Policy bands: MASK from 0.35, BLOCK from 0.65 */}
-          <ReferenceLine y={RISK_BANDS.medium} stroke="#f59e0b" strokeOpacity={0.5} strokeDasharray="3 3" />
-          <ReferenceLine y={RISK_BANDS.high} stroke="#ef4444" strokeOpacity={0.5} strokeDasharray="3 3" />
+          <ReferenceLine y={RISK_BANDS.medium} stroke="#a8650d" strokeOpacity={0.5} strokeDasharray="3 3" />
+          <ReferenceLine y={RISK_BANDS.high} stroke="#b3261e" strokeOpacity={0.5} strokeDasharray="3 3" />
           
           <Line 
             type="monotone" 
             dataKey="ewmaRisk" 
-            stroke="#f59e0b" 
+            stroke="#a8650d" 
             strokeWidth={2} 
-            dot={{ r: 3, strokeWidth: 1, fill: '#020617', stroke: '#f59e0b' }} 
-            activeDot={{ r: 5, fill: '#f59e0b', stroke: '#020617', strokeWidth: 2 }} 
+            dot={{ r: 3, strokeWidth: 1, fill: '#fafaf8', stroke: '#a8650d' }} 
+            activeDot={{ r: 5, fill: '#a8650d', stroke: '#fafaf8', strokeWidth: 2 }} 
           />
           <Line 
             type="monotone" 
             dataKey="instantRisk" 
-            stroke="#3b82f6" 
+            stroke="#243f8f" 
             strokeWidth={1} 
             strokeDasharray="4 4"
             dot={false}
-            activeDot={{ r: 3, fill: '#3b82f6', stroke: '#020617', strokeWidth: 1 }} 
+            activeDot={{ r: 3, fill: '#243f8f', stroke: '#fafaf8', strokeWidth: 1 }} 
           />
         </LineChart>
       </ResponsiveContainer>

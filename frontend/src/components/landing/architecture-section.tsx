@@ -28,7 +28,7 @@ export function ArchitectureSection() {
 
             {/* AegisGraph Security Layer */}
             <div className="bg-slate-950 border border-blue-900/50 p-6 rounded w-full">
-              <div className="text-blue-500 font-semibold text-center mb-6 text-base tracking-wider">AEGISGRAPH SECURITY LAYER</div>
+              <div className="text-blue-500 font-semibold text-center mb-6 text-base">AegisGraph SECURITY LAYER</div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded text-center text-slate-400 text-xs flex items-center justify-center">
                   Behavioral Telemetry

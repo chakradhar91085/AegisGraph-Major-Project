@@ -42,8 +42,8 @@ export function SecuritySection() {
 
           {/* Suspicious Behavior Path */}
           <div className="bg-slate-900 border border-slate-800 p-8 rounded-lg flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-rose-950/30 border border-rose-900/50 rounded-full flex items-center justify-center mb-6">
-              <ShieldAlert className="w-6 h-6 text-rose-500" />
+            <div className="w-12 h-12 bg-red-950/30 border border-red-900/50 rounded-full flex items-center justify-center mb-6">
+              <ShieldAlert className="w-6 h-6 text-red-400" />
             </div>
             <h3 className="font-sans font-semibold text-xl text-slate-200 mb-6">
               Suspicious Behavior
@@ -62,7 +62,7 @@ export function SecuritySection() {
                 Restricted Retrieval
               </div>
               <ArrowRight className="w-4 h-4 text-slate-600 rotate-90" />
-              <div className="bg-rose-950/20 border border-rose-900/40 py-3 w-full rounded text-sm text-rose-400 font-mono">
+              <div className="bg-red-950 border border-red-900 py-3 w-full rounded text-sm text-red-400 font-mono">
                 Reduced Exposure
               </div>
             </div>

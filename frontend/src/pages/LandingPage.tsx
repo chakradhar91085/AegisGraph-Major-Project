@@ -9,7 +9,7 @@ import { FooterSection } from '../components/landing/footer-section';
 
 export function LandingPage() {
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[#050505]">
+    <main className="relative min-h-screen overflow-x-hidden bg-slate-950">
       <Navigation />
       <HeroSection />
       <HowItWorksSection />

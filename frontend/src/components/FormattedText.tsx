@@ -34,12 +34,15 @@ function formatLine(line: string) {
 }
 
 function formatInline(text: string) {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[REDACTED_[A-Z]+\])/g).map((part, i) => {
     if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i} className="text-slate-50">{part.slice(2, -2)}</strong>;
     }
     if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
       return <code key={i} className="px-1 bg-slate-800 rounded text-xs font-mono">{part.slice(1, -1)}</code>;
+    }
+    if (/^\[REDACTED_[A-Z]+\]$/.test(part)) {
+      return <span key={i} className="redaction" title="Withheld by the security policy">{part}</span>;
     }
     return part;
   });

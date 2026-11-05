@@ -34,6 +34,9 @@ export class GraphVisualizer {
     private restLength: number = 150;
     private gravity: number = 0.02;
 
+    // Keep the whole graph in view until the user pans or zooms by hand
+    private autoFit: boolean = true;
+
     // Interaction state
     private isDragging: boolean = false;
     private isPanning: boolean = false;
@@ -66,6 +69,7 @@ export class GraphVisualizer {
         this.nodes = [];
         this.edges = [];
         this.nodeMap.clear();
+        this.autoFit = true;
 
         // Spawn in a circle to prevent identical origins
         const cx = 0;
@@ -100,6 +104,10 @@ export class GraphVisualizer {
                 });
             }
         });
+
+        // Lay the graph out once, up front, so it appears still instead of jittering into place.
+        const steps = 300;
+        for (let i = 0; i < steps; i++) this._stepPhysics(1 - i / steps);
     }
 
     public resize() {
@@ -108,6 +116,7 @@ export class GraphVisualizer {
             this.canvas.width = rect.width;
             this.canvas.height = rect.height;
         }
+        this.autoFit = true;
     }
 
     private setupEventListeners() {
@@ -153,11 +162,11 @@ export class GraphVisualizer {
         const dy = e.clientY - this.lastMouseY;
         
         if (this.isDragging && this.draggedNode) {
+            this.autoFit = false;
             this.draggedNode.x! += dx / this.scale;
             this.draggedNode.y! += dy / this.scale;
-            this.draggedNode.vx = 0;
-            this.draggedNode.vy = 0;
         } else if (this.isPanning) {
+            this.autoFit = false;
             this.panX += dx;
             this.panY += dy;
         } else {
@@ -191,7 +200,8 @@ export class GraphVisualizer {
 
     private onWheel(e: WheelEvent) {
         e.preventDefault();
-        
+        this.autoFit = false;
+
         const zoomIntensity = 0.1;
         const zoom = Math.exp(e.deltaY < 0 ? zoomIntensity : -zoomIntensity);
         
@@ -205,7 +215,8 @@ export class GraphVisualizer {
         this.scale *= zoom;
     }
 
-    private _stepPhysics() {
+    // `cooling` falls from 1 to 0 across the layout, so movement shrinks until the nodes stop.
+    private _stepPhysics(cooling: number) {
         if (this.nodes.length === 0) return;
 
         // 1. Repulsion (Coulomb)
@@ -252,8 +263,6 @@ export class GraphVisualizer {
 
         // 3. Center Gravity & Velocity Update
         for (const n of this.nodes) {
-            if (this.draggedNode === n) continue;
-
             // Gravity towards 0,0
             n.vx! -= n.x! * this.gravity;
             n.vy! -= n.y! * this.gravity;
@@ -261,8 +270,8 @@ export class GraphVisualizer {
             // Damping & Integration
             n.vx! *= this.damping;
             n.vy! *= this.damping;
-            n.x! += n.vx!;
-            n.y! += n.vy!;
+            n.x! += n.vx! * cooling;
+            n.y! += n.vy! * cooling;
         }
     }
 
@@ -271,15 +280,30 @@ export class GraphVisualizer {
         const t = type.toLowerCase();
         if (t.includes('person') || t.includes('employee')) return '👤';
         if (t.includes('email') || t.includes('message')) return '✉️';
-        if (t.includes('topic')) return '🏷️';
+        if (t.includes('topic') || t.includes('theme')) return '🏷️';
         if (t.includes('chunk')) return '📄';
         if (t.includes('entity')) return '🔶';
         return '⚪';
     }
 
+    private _fitToView() {
+        if (!this.autoFit || this.nodes.length === 0) return;
+        const { width, height } = this.canvas;
+        const xs = this.nodes.map(n => n.x!);
+        const ys = this.nodes.map(n => n.y!);
+        const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        // Screen-pixel margins leave room for the node circle and its label.
+        this.scale = Math.min(1, (width - 140) / (maxX - minX || 1), (height - 100) / (maxY - minY || 1));
+        this.panX = width / 2 - ((minX + maxX) / 2) * this.scale;
+        this.panY = height / 2 - ((minY + maxY) / 2) * this.scale;
+    }
+
     private _render() {
         const { width, height } = this.canvas;
-        this.ctx.clearRect(0, 0, width, height);
+        // Opaque, so page-darkening extensions cannot hide the dark labels.
+        this.ctx.fillStyle = '#fafaf8';
+        this.ctx.fillRect(0, 0, width, height);
+        this._fitToView();
 
         this.ctx.save();
         this.ctx.translate(this.panX, this.panY);
@@ -294,7 +318,7 @@ export class GraphVisualizer {
             // Highlight check
             const isActive = this.hoveredNode === source || this.hoveredNode === target;
             
-            this.ctx.strokeStyle = isActive ? '#3b82f6' : '#334155';
+            this.ctx.strokeStyle = isActive ? '#243f8f' : '#c4cad0';
             this.ctx.globalAlpha = (this.hoveredNode && !isActive) ? 0.1 : 1.0;
             
             this.ctx.beginPath();
@@ -310,10 +334,10 @@ export class GraphVisualizer {
                 this.ctx.font = '10px monospace';
                 const textWidth = this.ctx.measureText(e.relation).width;
                 
-                this.ctx.fillStyle = '#020617';
+                this.ctx.fillStyle = '#eceef0';
                 this.ctx.fillRect(midX - textWidth/2 - 2, midY - 6, textWidth + 4, 12);
                 
-                this.ctx.fillStyle = '#94a3b8';
+                this.ctx.fillStyle = '#5b646d';
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
                 this.ctx.fillText(e.relation, midX, midY);
@@ -333,15 +357,15 @@ export class GraphVisualizer {
             if (isActive) {
                 this.ctx.beginPath();
                 this.ctx.arc(n.x!, n.y!, 24, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+                this.ctx.fillStyle = 'rgba(36, 63, 143, 0.18)';
                 this.ctx.fill();
             }
 
             // Circle Body
             this.ctx.beginPath();
             this.ctx.arc(n.x!, n.y!, 16, 0, Math.PI * 2);
-            this.ctx.fillStyle = '#1e293b';
-            this.ctx.strokeStyle = isActive ? '#3b82f6' : '#475569';
+            this.ctx.fillStyle = '#fafaf8';
+            this.ctx.strokeStyle = isActive ? '#243f8f' : '#76808a';
             this.ctx.lineWidth = 2;
             this.ctx.fill();
             this.ctx.stroke();
@@ -352,22 +376,17 @@ export class GraphVisualizer {
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(this._getIconForType(n.type), n.x!, n.y!);
 
-            // Label
-            this.ctx.font = '12px monospace';
-            this.ctx.fillStyle = '#f8fafc';
-            this.ctx.fillText(n.label || n.id, n.x!, n.y! + 26);
-            
-            // Sub-label (type)
-            this.ctx.font = '9px monospace';
-            this.ctx.fillStyle = '#94a3b8';
-            this.ctx.fillText(n.type || 'unknown', n.x!, n.y! + 38);
+            // Label: same on-screen size at any zoom, shortened (the full text is in the details card)
+            const label = n.label || n.id;
+            this.ctx.font = `${11 / this.scale}px monospace`;
+            this.ctx.fillStyle = '#14181c';
+            this.ctx.fillText(label.length > 18 ? `${label.slice(0, 17)}…` : label, n.x!, n.y! + 16 + 10 / this.scale);
         }
 
         this.ctx.restore();
     }
 
     private loop() {
-        this._stepPhysics();
         this._render();
         this.animationFrameId = requestAnimationFrame(() => this.loop());
     }

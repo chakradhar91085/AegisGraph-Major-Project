@@ -1,149 +1,124 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: "Barlow", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Courier New", monospace;
-  --font-display: "Barlow Condensed", system-ui, sans-serif;
+/*
+  Case-file theme: ink on cool paper, redaction black, stamp red.
 
-  /* Clean dark navy/charcoal base */
-  --color-background: #0f172a;
-  --color-foreground: #f8fafc;
+  The components were written against Tailwind's dark slate/blue scale. Rather than
+  touch ~400 class names, the scale is redefined here as a LIGHT scale, so the same
+  names now read: slate-950 = page, slate-900 = sheet, slate-800/700 = rules,
+  slate-50..400 = ink from darkest to softest. Edit the palette here, not in the JSX.
+*/
+@theme {
+  --font-sans: "Familjen Grotesk", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+  --font-mono: "Familjen Grotesk", system-ui, sans-serif;
 
-  /* Surfaces */
-  --color-card: #1e293b;
-  --color-card-foreground: #f8fafc;
-  --color-muted: #334155;
-  --color-muted-foreground: #94a3b8;
+  --color-slate-50: #14181c;
+  --color-slate-100: #20262b;
+  --color-slate-200: #323940;
+  --color-slate-300: #454d55;
+  --color-slate-400: #5b646d;
+  --color-slate-500: #76808a;
+  --color-slate-600: #9aa2aa;
+  --color-slate-700: #c4cad0;
+  --color-slate-800: #d6dbe0;
+  --color-slate-900: #fafaf8;
+  --color-slate-950: #eceef0;
 
-  /* Primary Blue Accent */
-  --color-primary: #3b82f6;
-  --color-primary-foreground: #ffffff;
-  --color-accent: #3b82f6;
-  --color-accent-foreground: #ffffff;
+  /* pen-ink blue: links, focus, the one interactive colour */
+  --color-blue-400: #243f8f;
+  --color-blue-500: #2c4aa6;
+  --color-blue-600: #243f8f;
+  --color-blue-900: #b9c5e6;
+  --color-blue-950: #e6ebf8;
 
-  /* Borders */
-  --color-border: #334155;
-  --color-border-bright: #475569;
-  --color-input: #1e293b;
-  --color-ring: #3b82f6;
+  /* stamp red: blocked, hard gates */
+  --color-red-300: #8c1f18;
+  --color-red-400: #b3261e;
+  --color-red-500: #b3261e;
+  --color-red-900: #e6b3ae;
+  --color-red-950: #fbe9e7;
 
-  /* Status */
-  --color-green: #22c55e;
-  --color-red: #ef4444;
-  --color-blue: #3b82f6;
-  --color-yellow: #eab308;
+  /* ochre: masking, sensitivity */
+  --color-amber-400: #94590a;
+  --color-amber-500: #a8650d;
+  --color-amber-900: #e8cf9f;
+  --color-amber-950: #faf0d9;
 
-  /* Chart */
-  --color-chart-1: #3b82f6;
-  --color-chart-2: #22c55e;
-  --color-chart-3: #60a5fa;
-  --color-chart-4: #a78bfa;
-  --color-chart-5: #f87171;
-
-  /* Clean rounded borders */
-  --radius: 0.5rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-
-  /* Sidebar */
-  --color-sidebar: #0f172a;
-  --color-sidebar-foreground: #f8fafc;
-  --color-sidebar-primary: #3b82f6;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #1e293b;
-  --color-sidebar-accent-foreground: #f8fafc;
-  --color-sidebar-border: #334155;
-  --color-sidebar-ring: #3b82f6;
-  
-  /* Destructive */
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #f8fafc;
-  
-  /* Popover */
-  --color-popover: #1e293b;
-  --color-popover-foreground: #f8fafc;
-
-  /* Secondary */
-  --color-secondary: #334155;
-  --color-secondary-foreground: #f8fafc;
+  /* cleared: normal access */
+  --color-emerald-400: #1d6a4b;
+  --color-emerald-500: #1d6a4b;
+  --color-emerald-900: #aed3c1;
+  --color-emerald-950: #e1f1e9;
+  --color-green-500: #1d6a4b;
+  --color-green-900: #aed3c1;
+  --color-green-950: #e1f1e9;
 }
 
 @layer base {
   * {
     box-sizing: border-box;
-    border-color: var(--color-border);
+    border-color: var(--color-slate-800);
   }
 
   html {
-    background: var(--color-background);
-    color: var(--color-foreground);
+    background: var(--color-slate-950);
+    color: var(--color-slate-50);
     scroll-behavior: smooth;
   }
 
   body {
-    background: var(--color-background);
-    color: var(--color-foreground);
+    background: var(--color-slate-950);
+    color: var(--color-slate-50);
     font-family: var(--font-sans);
-    font-weight: 400;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
 
   ::selection {
-    background: var(--color-primary);
-    color: var(--color-primary-foreground);
+    background: var(--color-slate-50);
+    color: var(--color-slate-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-blue-500);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 }
 
-/* ── TYPOGRAPHY ─────────────────────────────────── */
-.font-display {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-style: italic;
+/* Headings and answers read like a typed memo; the interface around them stays sans. */
+.font-display, .font-display-normal {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.memo {
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  max-width: 68ch;
 }
 
-.font-display-normal {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-style: normal;
-}
-
-/* ── UTILITY ─────────────────────────────────────── */
-
-/* Structural horizontal rule */
-.hr-struct {
-  border: none;
-  height: 1px;
-  background: var(--color-border);
-}
-
-/* System tag */
-.sys-tag {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.sys-tag::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--color-primary);
+/* A masked value (the backend sends [REDACTED_NAME], [REDACTED_EMAIL], ...) shown as the
+   black bar a document reviewer would draw. Text stays in the DOM for screen readers. */
+.redaction {
   display: inline-block;
+  vertical-align: baseline;
+  min-width: 5.5ch;
+  height: 1.05em;
+  margin: 0 0.1em;
+  border-radius: 1px;
+  background: #0b0d0f;
+  color: transparent;
+  user-select: none;
+  overflow: hidden;
+  line-height: 1;
 }
 
-/* Row item hover */
-.row-hover {
-  transition: background 0.15s ease;
-}
-.row-hover:hover {
-  background: var(--color-card);
-}
+.row-hover { transition: background 0.15s ease; }
+.row-hover:hover { background: var(--color-slate-900); }

@@ -55,9 +55,9 @@ export function Shell({ badge, actions, sections }: ShellProps) {
     <>
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-800 px-5">
         <Logo />
-        <span className="font-display text-lg tracking-[0.1em] text-slate-50">AEGISGRAPH</span>
+        <span className="font-display text-xl text-slate-50">AegisGraph</span>
         {badge && (
-          <span className="ml-auto rounded border border-blue-500/40 px-1.5 py-0.5 text-[11px] font-mono uppercase tracking-wider text-blue-400">
+          <span className="ml-auto rounded border border-blue-500/40 px-1.5 py-0.5 text-[11px] font-mono text-blue-400">
             {badge}
           </span>
         )}
@@ -71,7 +71,7 @@ export function Shell({ badge, actions, sections }: ShellProps) {
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
         {sections.map((section) => (
           <div key={section.title}>
-            <div className="mb-2 px-3 text-xs font-mono uppercase tracking-[0.15em] text-slate-500">{section.title}</div>
+            <div className="mb-2 px-3 text-xs font-mono text-slate-500">{section.title}</div>
             <div className="flex flex-col gap-0.5">
               {section.items.map((item) => (
                 <NavLink
@@ -99,7 +99,7 @@ export function Shell({ badge, actions, sections }: ShellProps) {
         <CopyUserId />
         <div className="flex items-center justify-between px-3 py-2">
           <UserButton appearance={{ elements: { userButtonAvatarBox: 'w-8 h-8' } }} />
-          <Link to="/" className="flex items-center gap-1 text-xs font-mono uppercase tracking-widest text-slate-400 hover:text-slate-50">
+          <Link to="/" className="flex items-center gap-1 text-xs font-mono text-slate-400 hover:text-slate-50">
             <ArrowLeft className="h-3 w-3" /> Exit
           </Link>
         </div>
@@ -125,7 +125,7 @@ export function Shell({ badge, actions, sections }: ShellProps) {
           <button onClick={() => setOpen(true)} className="p-1 text-slate-300" aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-display tracking-[0.1em]">AEGISGRAPH</span>
+          <span className="font-display">AegisGraph</span>
         </div>
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <Outlet />

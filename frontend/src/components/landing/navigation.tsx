@@ -40,8 +40,8 @@ export function Navigation() {
                 <path d="M12 9l-3.5 5M12 9l3.5 5M8.5 14h7" strokeWidth="1" strokeDasharray="1 2" opacity="0.8" />
               </svg>
             </div>
-            <span className="font-sans font-semibold text-xl tracking-widest text-slate-50">AEGISGRAPH</span>
-            <span className="hidden lg:block font-mono text-[10px] text-slate-500 border-l border-slate-800 pl-3 ml-1 tracking-widest uppercase mt-1">
+            <span className="font-sans font-semibold text-xl text-slate-50">AegisGraph</span>
+            <span className="hidden lg:block font-mono text-[10px] text-slate-500 border-l border-slate-800 pl-3 ml-1 mt-1">
               Behavioral Security for Graph-RAG
             </span>
           </a>
@@ -52,7 +52,7 @@ export function Navigation() {
               <a
                 key={link.name}
                 href={link.href}
-                className="font-mono text-xs tracking-wider text-slate-400 hover:text-blue-400 transition-colors duration-300"
+                className="font-mono text-xs text-slate-400 hover:text-blue-400 transition-colors duration-300"
               >
                 {link.name}
               </a>
@@ -63,7 +63,7 @@ export function Navigation() {
           <div className="hidden md:flex items-center gap-6">
             <SignedOut>
               <SignInButton mode="modal" forceRedirectUrl="/app">
-                <button className="font-mono text-xs tracking-wider text-slate-400 hover:text-slate-50 transition-colors duration-300 cursor-pointer">
+                <button className="font-mono text-xs text-slate-400 hover:text-slate-50 transition-colors duration-300 cursor-pointer">
                   SIGN IN
                 </button>
               </SignInButton>
@@ -71,9 +71,9 @@ export function Navigation() {
             <SignedIn>
               <a
                 href="/app"
-                className="font-mono text-[11px] tracking-widest bg-blue-600 text-slate-50 px-5 h-9 flex items-center hover:bg-blue-500 transition-colors duration-300 font-semibold mr-2 rounded-sm"
+                className="font-mono text-[11px] bg-blue-600 text-white px-5 h-9 flex items-center hover:bg-blue-500 transition-colors duration-300 font-semibold mr-2 rounded-sm"
               >
-                LAUNCH AEGISGRAPH →
+                LAUNCH AegisGraph →
               </a>
               <UserButton afterSignOutUrl="/" />
             </SignedIn>
@@ -103,7 +103,7 @@ export function Navigation() {
               key={link.name}
               href={link.href}
               onClick={() => setOpen(false)}
-              className={`border-b border-slate-900 px-8 py-6 font-sans text-2xl font-semibold tracking-wider text-slate-200 hover:text-blue-400 transition-all duration-300 flex items-center justify-between ${
+              className={`border-b border-slate-900 px-8 py-6 font-sans text-2xl font-semibold text-slate-200 hover:text-blue-400 transition-all duration-300 flex items-center justify-between ${
                 open ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
               }`}
               style={{ transitionDelay: open ? `${i * 60}ms` : "0ms" }}
@@ -114,7 +114,7 @@ export function Navigation() {
           <div className="border-b border-slate-900 px-8 py-6">
             <SignedOut>
               <SignInButton mode="modal" forceRedirectUrl="/app">
-                <button className="w-full text-left font-sans text-2xl font-semibold tracking-wider text-slate-200 hover:text-blue-400 transition-colors duration-300">
+                <button className="w-full text-left font-sans text-2xl font-semibold text-slate-200 hover:text-blue-400 transition-colors duration-300">
                   SIGN IN
                 </button>
               </SignInButton>
@@ -127,9 +127,9 @@ export function Navigation() {
             <a
               href="/app"
               onClick={() => setOpen(false)}
-              className="w-full block text-center font-mono text-sm tracking-widest bg-blue-600 text-slate-50 py-4 font-semibold rounded-sm"
+              className="w-full block text-center font-mono text-sm bg-blue-600 text-white py-4 font-semibold rounded-sm"
             >
-              LAUNCH AEGISGRAPH →
+              LAUNCH AegisGraph →
             </a>
           </SignedIn>
         </div>

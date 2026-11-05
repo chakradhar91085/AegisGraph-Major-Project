@@ -1,5 +1,5 @@
 import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
-import { ArrowDown, ShieldCheck } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 
 export function HeroSection() {
   return (
@@ -10,25 +10,19 @@ export function HeroSection() {
           
           {/* LEFT COLUMN: Text */}
           <div className="relative z-10 lg:pr-8">
-            <div className="mb-6 inline-flex items-center gap-2 border border-blue-900/50 bg-blue-950/30 px-3 py-1.5 rounded-sm">
-              <ShieldCheck className="w-4 h-4 text-blue-400" />
-              <p className="font-mono text-xs tracking-widest text-blue-400 font-semibold">
-                BEHAVIORAL SECURITY FOR GRAPH-RAG
-              </p>
-            </div>
-
-            <h1 className="font-sans font-semibold text-5xl sm:text-6xl lg:text-[64px] leading-[1.1] tracking-tight text-slate-50 mb-6">
-              SECURE HOW AI EXPLORES KNOWLEDGE.
+            <h1 className="font-display text-5xl sm:text-6xl lg:text-[68px] leading-[1.04] text-slate-50 mb-6">
+              Ask anything.<br />
+              Names stay <span className="redaction" style={{ minWidth: '4.2ch', height: '0.78em' }}>hidden</span> when the questions look like harvesting.
             </h1>
-            
+
             <p className="text-base sm:text-lg text-slate-400 leading-relaxed max-w-xl mb-10 font-sans">
-              AegisGraph is a behavioral security framework for Retrieval-Augmented Generation systems that monitors user interaction patterns and dynamically controls information exposure during graph-based retrieval.
+              AegisGraph answers questions over the Enron email archive and watches how each person asks. As their pattern turns suspicious it first blacks out names, then blocks the answer.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-fit">
               <SignedOut>
                 <SignInButton mode="modal" forceRedirectUrl="/app">
-                  <button className="inline-flex items-center justify-center gap-2 bg-blue-600 text-slate-50 font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm">
+                  <button className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-md">
                     Explore AegisGraph
                   </button>
                 </SignInButton>
@@ -36,14 +30,14 @@ export function HeroSection() {
               <SignedIn>
                 <a
                   href="/app"
-                  className="inline-flex items-center justify-center gap-2 bg-blue-600 text-slate-50 font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-sm"
+                  className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-sans text-sm px-6 py-3.5 hover:bg-blue-500 transition-colors font-semibold rounded-md"
                 >
                   Explore AegisGraph
                 </a>
               </SignedIn>
               <a
                 href="#architecture"
-                className="inline-flex items-center justify-center gap-2 border border-slate-700 text-slate-300 font-sans text-sm px-6 py-3.5 hover:bg-slate-800 hover:text-slate-50 transition-colors rounded-sm"
+                className="inline-flex items-center justify-center gap-2 border border-slate-700 text-slate-300 font-sans text-sm px-6 py-3.5 hover:bg-slate-800 hover:text-slate-50 transition-colors rounded-md"
               >
                 View Architecture
               </a>
@@ -91,7 +85,7 @@ function PipelineStep({ title, highlight = false, success = false }: { title: st
   }
 
   return (
-    <div className={`w-full py-3 px-4 rounded border ${bg} ${border} text-center font-mono text-sm tracking-wide ${text}`}>
+    <div className={`w-full py-3 px-4 rounded border ${bg} ${border} text-center font-mono text-sm ${text}`}>
       {title}
     </div>
   );
